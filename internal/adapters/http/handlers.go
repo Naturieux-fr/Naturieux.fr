@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	appquiz "github.com/fieve/naturieux/internal/application/quiz"
-	"github.com/fieve/naturieux/internal/domain/quiz"
+	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
 )
 
 // Handler contains all HTTP handlers.

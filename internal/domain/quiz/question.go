@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/fieve/naturieux/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
 )
 
 // Choice represents an answer choice for a question.

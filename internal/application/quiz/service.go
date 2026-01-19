@@ -6,9 +6,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fieve/naturieux/internal/domain/gamification"
-	"github.com/fieve/naturieux/internal/domain/quiz"
-	"github.com/fieve/naturieux/internal/ports"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
+)
+
+// Default values for session configuration.
+const (
+	defaultQuestionCount = 10
+	accuracyBonusHigh    = 100
+	accuracyBonusMedium  = 50
+	accuracyThresholdHigh   = 90
+	accuracyThresholdMedium = 80
+	streakXPMultiplier   = 10
 )
 
 // Service handles quiz game logic and orchestration.
@@ -57,14 +67,10 @@ type StartSessionResponse struct {
 	TotalQuestions int
 }
 
-// StartSession creates and starts a new quiz session.
-func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*StartSessionResponse, error) {
-	// Validate request
-	if req.UserID == "" {
-		return nil, errors.New("user ID is required")
-	}
+// normalizeRequest applies default values to the request.
+func (req *StartSessionRequest) normalize() {
 	if req.QuestionCount <= 0 {
-		req.QuestionCount = 10 // Default
+		req.QuestionCount = defaultQuestionCount
 	}
 	if len(req.QuizTypes) == 0 {
 		req.QuizTypes = []quiz.QuizType{quiz.ImageQuiz}
@@ -72,22 +78,48 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 	if !quiz.IsValidDifficulty(req.Difficulty) {
 		req.Difficulty = quiz.Beginner
 	}
+}
 
-	// Verify player exists
-	_, err := s.playerRepo.GetByID(ctx, req.UserID)
-	if err != nil {
+// StartSession creates and starts a new quiz session.
+func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*StartSessionResponse, error) {
+	if req.UserID == "" {
+		return nil, errors.New("user ID is required")
+	}
+	req.normalize()
+
+	if _, err := s.playerRepo.GetByID(ctx, req.UserID); err != nil {
 		return nil, fmt.Errorf("player not found: %w", err)
 	}
 
-	// Generate questions
-	questions := make([]*quiz.Question, 0, req.QuestionCount)
-	for i := 0; i < req.QuestionCount; i++ {
-		// Rotate through quiz types
-		quizType := req.QuizTypes[i%len(req.QuizTypes)]
+	questions, err := s.generateQuestions(ctx, req)
+	if err != nil {
+		return nil, err
+	}
 
-		question, qErr := s.questionFactory.CreateQuestion(ctx, quizType, req.Difficulty)
-		if qErr != nil {
-			// Log and continue trying
+	session, err := s.buildAndStartSession(req, questions)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.saveSession(ctx, session); err != nil {
+		return nil, err
+	}
+
+	return &StartSessionResponse{
+		SessionID:      session.ID(),
+		FirstQuestion:  session.CurrentQuestion(),
+		TotalQuestions: len(questions),
+	}, nil
+}
+
+// generateQuestions creates questions for the session.
+func (s *Service) generateQuestions(ctx context.Context, req StartSessionRequest) ([]*quiz.Question, error) {
+	questions := make([]*quiz.Question, 0, req.QuestionCount)
+
+	for i := 0; i < req.QuestionCount; i++ {
+		quizType := req.QuizTypes[i%len(req.QuizTypes)]
+		question, err := s.questionFactory.CreateQuestion(ctx, quizType, req.Difficulty)
+		if err != nil {
 			continue
 		}
 		questions = append(questions, question)
@@ -96,8 +128,11 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 	if len(questions) == 0 {
 		return nil, errors.New("failed to generate any questions")
 	}
+	return questions, nil
+}
 
-	// Create session
+// buildAndStartSession creates and starts a new session.
+func (s *Service) buildAndStartSession(req StartSessionRequest, questions []*quiz.Question) (*quiz.Session, error) {
 	session, err := quiz.NewSessionBuilder().
 		WithUserID(req.UserID).
 		WithDifficulty(req.Difficulty).
@@ -109,23 +144,21 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 		return nil, fmt.Errorf("building session: %w", err)
 	}
 
-	// Start the session
 	if err := session.Start(); err != nil {
 		return nil, fmt.Errorf("starting session: %w", err)
 	}
+	return session, nil
+}
 
-	// Persist session
-	if s.sessionRepo != nil {
-		if err := s.sessionRepo.Save(ctx, session); err != nil {
-			return nil, fmt.Errorf("saving session: %w", err)
-		}
+// saveSession persists the session if repository is configured.
+func (s *Service) saveSession(ctx context.Context, session *quiz.Session) error {
+	if s.sessionRepo == nil {
+		return nil
 	}
-
-	return &StartSessionResponse{
-		SessionID:      session.ID(),
-		FirstQuestion:  session.CurrentQuestion(),
-		TotalQuestions: len(questions),
-	}, nil
+	if err := s.sessionRepo.Save(ctx, session); err != nil {
+		return fmt.Errorf("saving session: %w", err)
+	}
+	return nil
 }
 
 // SubmitAnswerRequest contains parameters for submitting an answer.
@@ -163,40 +196,43 @@ func (s *Service) SubmitAnswer(
 		return nil, errors.New("no current question")
 	}
 
-	// Submit the answer
 	answer, err := session.SubmitAnswer(req.SpeciesID, req.TimeTaken)
 	if err != nil {
 		return nil, fmt.Errorf("submitting answer: %w", err)
 	}
 
-	// Persist updated session
-	if s.sessionRepo != nil {
-		if err := s.sessionRepo.Save(ctx, session); err != nil {
-			return nil, fmt.Errorf("saving session: %w", err)
+	if err := s.saveSession(ctx, session); err != nil {
+		return nil, err
+	}
+
+	response := s.buildAnswerResponse(session, currentQuestion, answer)
+
+	if response.SessionComplete {
+		if err := s.handleSessionComplete(ctx, session); err != nil {
+			fmt.Printf("error handling session complete: %v\n", err)
 		}
 	}
 
-	response := &SubmitAnswerResponse{
+	return response, nil
+}
+
+// buildAnswerResponse creates the response for an answer submission.
+func (s *Service) buildAnswerResponse(
+	session *quiz.Session,
+	question *quiz.Question,
+	answer *quiz.Answer,
+) *SubmitAnswerResponse {
+	return &SubmitAnswerResponse{
 		IsCorrect:        answer.IsCorrect,
 		Score:            answer.Score,
-		CorrectSpeciesID: currentQuestion.CorrectSpecies().ID(),
-		CorrectName:      currentQuestion.CorrectSpecies().DisplayName(),
+		CorrectSpeciesID: question.CorrectSpecies().ID(),
+		CorrectName:      question.CorrectSpecies().DisplayName(),
 		CurrentStreak:    session.CurrentStreak(),
 		NextQuestion:     session.CurrentQuestion(),
 		SessionComplete:  session.Status() == quiz.SessionCompleted,
 		TotalScore:       session.TotalScore(),
 		Accuracy:         session.Accuracy(),
 	}
-
-	// Handle session completion
-	if response.SessionComplete {
-		if err := s.handleSessionComplete(ctx, session); err != nil {
-			// Log error but don't fail the response
-			fmt.Printf("error handling session complete: %v\n", err)
-		}
-	}
-
-	return response, nil
 }
 
 // handleSessionComplete processes gamification when a session completes.
@@ -206,53 +242,65 @@ func (s *Service) handleSessionComplete(ctx context.Context, session *quiz.Sessi
 		return fmt.Errorf("getting player: %w", err)
 	}
 
-	// Calculate XP earned
-	xp := session.TotalScore()
+	xp := s.calculateSessionXP(session)
+	s.processLevelUps(player, xp)
+	s.processAchievements(ctx, player, session)
 
-	// Bonus XP for accuracy
-	if session.Accuracy() >= 90 {
-		xp += 100
-	} else if session.Accuracy() >= 80 {
-		xp += 50
+	if err := s.playerRepo.Update(ctx, player); err != nil {
+		return fmt.Errorf("updating player: %w", err)
 	}
 
-	// Bonus XP for streak
-	xp += session.MaxStreak() * 10
+	s.publishSessionCompleted(session, player)
+	return nil
+}
 
-	// Add XP and check for level ups
+// calculateSessionXP calculates XP earned from a session.
+func (s *Service) calculateSessionXP(session *quiz.Session) int {
+	xp := session.TotalScore()
+
+	accuracy := session.Accuracy()
+	if accuracy >= accuracyThresholdHigh {
+		xp += accuracyBonusHigh
+	} else if accuracy >= accuracyThresholdMedium {
+		xp += accuracyBonusMedium
+	}
+
+	xp += session.MaxStreak() * streakXPMultiplier
+	return xp
+}
+
+// processLevelUps handles level up events.
+func (s *Service) processLevelUps(player *gamification.Player, xp int) {
 	levelUps := player.AddXP(xp)
 	for _, event := range levelUps {
 		if s.eventPublisher != nil {
 			s.eventPublisher.PublishLevelUp(player, event)
 		}
 	}
+}
 
-	// Record game and check for achievements
+// processAchievements handles achievement unlocks.
+func (s *Service) processAchievements(_ context.Context, player *gamification.Player, session *quiz.Session) {
 	achievements := player.RecordGame(
 		session.CorrectCount(),
 		session.QuestionsCount(),
 		session.MaxStreak(),
 	)
+
 	for _, achievement := range achievements {
 		if s.eventPublisher != nil {
 			s.eventPublisher.PublishAchievementUnlocked(player, achievement)
 		}
-		// Award achievement XP
 		info := gamification.GetAchievementInfo(achievement)
 		player.AddXP(info.XPReward)
 	}
+}
 
-	// Persist player updates
-	if err := s.playerRepo.Update(ctx, player); err != nil {
-		return fmt.Errorf("updating player: %w", err)
-	}
-
-	// Publish session completed event
+// publishSessionCompleted publishes the session completed event.
+func (s *Service) publishSessionCompleted(session *quiz.Session, player *gamification.Player) {
 	if s.eventPublisher != nil {
 		s.eventPublisher.PublishSessionCompleted(session, player)
 	}
-
-	return nil
 }
 
 // GetSessionStats returns statistics for a user's sessions.
@@ -270,12 +318,5 @@ func (s *Service) AbandonSession(ctx context.Context, session *quiz.Session) err
 	}
 
 	session.Abandon()
-
-	if s.sessionRepo != nil {
-		if err := s.sessionRepo.Save(ctx, session); err != nil {
-			return fmt.Errorf("saving abandoned session: %w", err)
-		}
-	}
-
-	return nil
+	return s.saveSession(ctx, session)
 }

@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/fieve/naturieux/internal/adapters/inaturalist"
-	"github.com/fieve/naturieux/internal/ports"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 func TestNewClient(t *testing.T) {

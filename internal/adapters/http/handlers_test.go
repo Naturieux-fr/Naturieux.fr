@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	httphandler "github.com/fieve/naturieux/internal/adapters/http"
+	httphandler "github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http"
 )
 
 func TestHandler_HandleHealthCheck(t *testing.T) {

@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/fieve/naturieux/internal/domain/gamification"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 )
 
 // PlayerRepository defines the interface for player data persistence.

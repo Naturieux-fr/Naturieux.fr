@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	appquiz "github.com/fieve/naturieux/internal/application/quiz"
-	"github.com/fieve/naturieux/internal/domain/quiz"
-	"github.com/fieve/naturieux/internal/domain/species"
-	"github.com/fieve/naturieux/internal/ports"
+	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 // mockSpeciesRepository is a test double for SpeciesRepository.

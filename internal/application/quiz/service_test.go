@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	appquiz "github.com/fieve/naturieux/internal/application/quiz"
-	"github.com/fieve/naturieux/internal/domain/gamification"
-	"github.com/fieve/naturieux/internal/domain/quiz"
-	"github.com/fieve/naturieux/internal/domain/species"
+	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 // mockPlayerRepository is a test double for PlayerRepository.
@@ -370,5 +371,119 @@ func TestService_AbandonSession_NilSession(t *testing.T) {
 	err := service.AbandonSession(context.Background(), nil)
 	if err == nil {
 		t.Error("AbandonSession() should return error for nil session")
+	}
+}
+
+// mockSessionRepository is a test double for QuizSessionRepository.
+type mockSessionRepository struct {
+	sessions map[string]*quiz.Session
+	stats    *mockStats
+}
+
+type mockStats struct {
+	userID     string
+	totalGames int
+	avgScore   float64
+}
+
+func newMockSessionRepository() *mockSessionRepository {
+	return &mockSessionRepository{
+		sessions: make(map[string]*quiz.Session),
+		stats: &mockStats{
+			userID:     "user1",
+			totalGames: 10,
+			avgScore:   85.5,
+		},
+	}
+}
+
+func (m *mockSessionRepository) Save(ctx context.Context, session *quiz.Session) error {
+	m.sessions[session.ID()] = session
+	return nil
+}
+
+func (m *mockSessionRepository) GetByID(ctx context.Context, id string) (*quiz.Session, error) {
+	if s, ok := m.sessions[id]; ok {
+		return s, nil
+	}
+	return nil, context.DeadlineExceeded
+}
+
+func (m *mockSessionRepository) GetByUserID(ctx context.Context, userID string, limit int) ([]*quiz.Session, error) {
+	var sessions []*quiz.Session
+	for _, s := range m.sessions {
+		if s.UserID() == userID {
+			sessions = append(sessions, s)
+			if len(sessions) >= limit {
+				break
+			}
+		}
+	}
+	return sessions, nil
+}
+
+func (m *mockSessionRepository) GetStats(ctx context.Context, userID string) (*ports.UserQuizStats, error) {
+	return &ports.UserQuizStats{
+		TotalSessions:   m.stats.totalGames,
+		TotalQuestions:  100,
+		TotalCorrect:    85,
+		AverageAccuracy: m.stats.avgScore,
+		BestStreak:      15,
+		TotalScore:      1000,
+		FavoriteTaxon:   "Mammalia",
+	}, nil
+}
+
+func TestService_GetSessionStats(t *testing.T) {
+	sessionRepo := newMockSessionRepository()
+	service := appquiz.NewService(nil, sessionRepo, nil, nil)
+
+	stats, err := service.GetSessionStats(context.Background(), "user1")
+	if err != nil {
+		t.Fatalf("GetSessionStats() error = %v", err)
+	}
+
+	if stats.TotalSessions != 10 {
+		t.Errorf("TotalSessions = %d, want 10", stats.TotalSessions)
+	}
+
+	if stats.AverageAccuracy != 85.5 {
+		t.Errorf("AverageAccuracy = %f, want 85.5", stats.AverageAccuracy)
+	}
+}
+
+func TestService_GetSessionStats_NoRepository(t *testing.T) {
+	service := appquiz.NewService(nil, nil, nil, nil)
+
+	_, err := service.GetSessionStats(context.Background(), "user1")
+	if err == nil {
+		t.Error("GetSessionStats() should return error when no repository")
+	}
+}
+
+func TestService_SubmitAnswer_NilSession(t *testing.T) {
+	service := appquiz.NewService(nil, nil, nil, nil)
+
+	req := appquiz.SubmitAnswerRequest{
+		SpeciesID: 1,
+		TimeTaken: time.Second,
+	}
+
+	_, err := service.SubmitAnswer(context.Background(), nil, req)
+	if err == nil {
+		t.Error("SubmitAnswer() should return error for nil session")
+	}
+}
+
+func TestService_StartSession_EmptyUserID(t *testing.T) {
+	service := appquiz.NewService(nil, nil, nil, nil)
+
+	req := appquiz.StartSessionRequest{
+		UserID: "",
+	}
+
+	_, err := service.StartSession(context.Background(), req)
+	if err == nil {
+		t.Error("StartSession() should return error for empty user ID")
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fieve/naturieux/internal/domain/quiz"
-	"github.com/fieve/naturieux/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
 )
 
 func createTestSpecies(id int, name string) *species.Species {

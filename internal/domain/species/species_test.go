@@ -3,7 +3,7 @@ package species_test
 import (
 	"testing"
 
-	"github.com/fieve/naturieux/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
 )
 
 func TestNewSpecies(t *testing.T) {

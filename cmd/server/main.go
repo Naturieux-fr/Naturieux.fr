@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	httphandler "github.com/fieve/naturieux/internal/adapters/http"
-	"github.com/fieve/naturieux/internal/adapters/inaturalist"
-	appquiz "github.com/fieve/naturieux/internal/application/quiz"
-	"github.com/fieve/naturieux/internal/domain/gamification"
-	"github.com/fieve/naturieux/internal/ports"
+	httphandler "github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist"
+	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 const (

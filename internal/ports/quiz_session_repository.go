@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/fieve/naturieux/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
 )
 
 // QuizSessionRepository defines the interface for quiz session persistence.

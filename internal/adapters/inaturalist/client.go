@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fieve/naturieux/internal/domain/species"
-	"github.com/fieve/naturieux/internal/ports"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 const (
@@ -183,35 +183,15 @@ func (c *Client) GetByID(ctx context.Context, id int) (*species.Species, error) 
 	return taxonToSpecies(&result.Results[0]), nil
 }
 
+// Default values for API requests.
+const (
+	defaultPerPage = "20"
+	maxPerPage     = 200
+)
+
 // GetRandom retrieves random species with photos matching the filter.
 func (c *Client) GetRandom(ctx context.Context, filter ports.SpeciesFilter) ([]*species.Species, error) {
-	params := url.Values{}
-	params.Set("photos", "true")
-	params.Set("quality_grade", "research")
-	params.Set("identified", "true")
-	params.Set("order_by", "random")
-
-	if filter.Limit > 0 {
-		params.Set("per_page", strconv.Itoa(min(filter.Limit, 200)))
-	} else {
-		params.Set("per_page", "20")
-	}
-
-	if filter.IconicTaxon != "" {
-		params.Set("iconic_taxa", filter.IconicTaxon)
-	}
-
-	if filter.PlaceID > 0 {
-		params.Set("place_id", strconv.Itoa(filter.PlaceID))
-	}
-
-	if len(filter.ExcludeIDs) > 0 {
-		ids := make([]string, len(filter.ExcludeIDs))
-		for i, id := range filter.ExcludeIDs {
-			ids[i] = strconv.Itoa(id)
-		}
-		params.Set("without_taxon_id", strings.Join(ids, ","))
-	}
+	params := c.buildObservationParams(filter)
 
 	resp, err := c.doRequest(ctx, "/observations", params)
 	if err != nil {
@@ -224,25 +204,74 @@ func (c *Client) GetRandom(ctx context.Context, filter ports.SpeciesFilter) ([]*
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 
-	// Deduplicate by species ID
-	seen := make(map[int]bool)
-	speciesList := make([]*species.Species, 0, len(result.Results))
+	return c.deduplicateObservations(result.Results), nil
+}
 
-	for _, obs := range result.Results {
+// buildObservationParams creates URL parameters for observation queries.
+func (c *Client) buildObservationParams(filter ports.SpeciesFilter) url.Values {
+	params := url.Values{}
+	params.Set("photos", "true")
+	params.Set("quality_grade", "research")
+	params.Set("identified", "true")
+	params.Set("order_by", "random")
+
+	c.applyFilterParams(params, filter)
+	return params
+}
+
+// applyFilterParams applies filter options to URL parameters.
+func (c *Client) applyFilterParams(params url.Values, filter ports.SpeciesFilter) {
+	if filter.Limit > 0 {
+		params.Set("per_page", strconv.Itoa(min(filter.Limit, maxPerPage)))
+	} else {
+		params.Set("per_page", defaultPerPage)
+	}
+
+	if filter.IconicTaxon != "" {
+		params.Set("iconic_taxa", filter.IconicTaxon)
+	}
+
+	if filter.PlaceID > 0 {
+		params.Set("place_id", strconv.Itoa(filter.PlaceID))
+	}
+
+	if len(filter.ExcludeIDs) > 0 {
+		params.Set("without_taxon_id", c.formatIDList(filter.ExcludeIDs))
+	}
+}
+
+// formatIDList converts a slice of IDs to a comma-separated string.
+func (c *Client) formatIDList(ids []int) string {
+	strs := make([]string, len(ids))
+	for i, id := range ids {
+		strs[i] = strconv.Itoa(id)
+	}
+	return strings.Join(strs, ",")
+}
+
+// deduplicateObservations extracts unique species from observations.
+func (c *Client) deduplicateObservations(observations []observation) []*species.Species {
+	seen := make(map[int]bool)
+	speciesList := make([]*species.Species, 0, len(observations))
+
+	for _, obs := range observations {
 		if obs.Taxon == nil || seen[obs.Taxon.ID] {
 			continue
 		}
 		seen[obs.Taxon.ID] = true
-
-		sp := taxonToSpecies(obs.Taxon)
-		// Add observation photos to species
-		for _, p := range obs.Photos {
-			sp.AddPhoto(photoToSpeciesPhoto(&p))
-		}
-		speciesList = append(speciesList, sp)
+		speciesList = append(speciesList, c.observationToSpecies(obs))
 	}
 
-	return speciesList, nil
+	return speciesList
+}
+
+// observationToSpecies converts an observation to a species with photos.
+func (c *Client) observationToSpecies(obs observation) *species.Species {
+	sp := taxonToSpecies(obs.Taxon)
+	for _, p := range obs.Photos {
+		sp.AddPhoto(photoToSpeciesPhoto(&p))
+	}
+	return sp
 }
 
 // GetSimilar retrieves species in the same genus or family.

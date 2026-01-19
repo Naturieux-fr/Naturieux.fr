@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/fieve/naturieux/internal/domain/quiz"
-	"github.com/fieve/naturieux/internal/domain/species"
-	"github.com/fieve/naturieux/internal/ports"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 // QuestionFactory creates quiz questions of various types.
@@ -121,56 +121,84 @@ func (f *questionFactory) CreateQuestion(
 	)
 }
 
+// Minimum number of choices required for a valid question.
+const minChoicesRequired = 2
+
 // getWrongChoices retrieves species to use as incorrect answers.
 func (f *questionFactory) getWrongChoices(
 	ctx context.Context,
 	correct *species.Species,
 	count int,
 ) ([]*species.Species, error) {
-	// First try to get similar species (same genus/family)
-	similar, err := f.speciesRepo.GetSimilar(ctx, correct.ID(), count)
-	if err == nil && len(similar) >= count {
+	similar := f.fetchSimilarSpecies(ctx, correct.ID(), count)
+	if len(similar) >= count {
 		return similar[:count], nil
 	}
 
-	// Fall back to random species from same taxon
-	filter := ports.SpeciesFilter{
-		IconicTaxon: correct.IconicTaxon(),
-		Limit:       count + 5, // Get extra to ensure enough unique
-		HasPhotos:   true,
-		ExcludeIDs:  []int{correct.ID()},
-	}
-
-	random, err := f.speciesRepo.GetRandom(ctx, filter)
+	random, err := f.fetchRandomSpecies(ctx, correct, count)
 	if err != nil {
 		return nil, err
 	}
 
-	// Combine similar and random, remove duplicates
-	seen := map[int]bool{correct.ID(): true}
-	result := make([]*species.Species, 0, count)
-
-	// Prefer similar species
-	for _, sp := range similar {
-		if !seen[sp.ID()] && len(result) < count {
-			seen[sp.ID()] = true
-			result = append(result, sp)
-		}
-	}
-
-	// Fill with random if needed
-	for _, sp := range random {
-		if !seen[sp.ID()] && len(result) < count {
-			seen[sp.ID()] = true
-			result = append(result, sp)
-		}
-	}
-
-	if len(result) < 2 {
+	result := f.combineUniqueSpecies(correct.ID(), similar, random, count)
+	if len(result) < minChoicesRequired {
 		return nil, errors.New("not enough species for choices")
 	}
 
 	return result, nil
+}
+
+// fetchSimilarSpecies retrieves similar species, returning empty slice on error.
+func (f *questionFactory) fetchSimilarSpecies(ctx context.Context, speciesID, count int) []*species.Species {
+	similar, err := f.speciesRepo.GetSimilar(ctx, speciesID, count)
+	if err != nil {
+		return nil
+	}
+	return similar
+}
+
+// fetchRandomSpecies retrieves random species from the same taxon.
+func (f *questionFactory) fetchRandomSpecies(ctx context.Context, correct *species.Species, count int) ([]*species.Species, error) {
+	filter := ports.SpeciesFilter{
+		IconicTaxon: correct.IconicTaxon(),
+		Limit:       count + 5,
+		HasPhotos:   true,
+		ExcludeIDs:  []int{correct.ID()},
+	}
+	return f.speciesRepo.GetRandom(ctx, filter)
+}
+
+// combineUniqueSpecies merges species lists, removing duplicates and the correct species.
+func (f *questionFactory) combineUniqueSpecies(
+	correctID int,
+	similar, random []*species.Species,
+	maxCount int,
+) []*species.Species {
+	seen := map[int]bool{correctID: true}
+	result := make([]*species.Species, 0, maxCount)
+
+	result = collectUniqueSpecies(result, similar, seen, maxCount)
+	result = collectUniqueSpecies(result, random, seen, maxCount)
+
+	return result
+}
+
+// collectUniqueSpecies adds unique species to the result slice up to maxCount.
+func collectUniqueSpecies(
+	result, candidates []*species.Species,
+	seen map[int]bool,
+	maxCount int,
+) []*species.Species {
+	for _, sp := range candidates {
+		if len(result) >= maxCount {
+			break
+		}
+		if !seen[sp.ID()] {
+			seen[sp.ID()] = true
+			result = append(result, sp)
+		}
+	}
+	return result
 }
 
 // selectMediaURL selects the appropriate media URL based on quiz type.

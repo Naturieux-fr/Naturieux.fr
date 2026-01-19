@@ -1,9 +1,9 @@
 # Naturieux.fr
 
-[![CI - Quality Analysis](https://github.com/fieve/naturieux/actions/workflows/ci.yml/badge.svg)](https://github.com/fieve/naturieux/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/fieve/naturieux/branch/main/graph/badge.svg)](https://codecov.io/gh/fieve/naturieux)
-[![Go Report Card](https://goreportcard.com/badge/github.com/fieve/naturieux)](https://goreportcard.com/report/github.com/fieve/naturieux)
-[![Security](https://github.com/fieve/naturieux/actions/workflows/quality-issues.yml/badge.svg)](https://github.com/fieve/naturieux/actions/workflows/quality-issues.yml)
+[![CI](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/ci.yml/badge.svg)](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/ci.yml)
+[![Quality Gate](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/quality-gate.yml/badge.svg)](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/quality-gate.yml)
+[![Security](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/security.yml/badge.svg)](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/security.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Naturieux-fr/Naturieux.fr)](https://goreportcard.com/report/github.com/Naturieux-fr/Naturieux.fr)
 
 Quiz naturaliste gamifie utilisant l'API iNaturalist pour l'identification d'especes.
 
@@ -58,8 +58,8 @@ naturieux/
 
 ```bash
 # Cloner le projet
-git clone https://github.com/fieve/naturieux.git
-cd naturieux
+git clone https://github.com/Naturieux-fr/Naturieux.fr.git
+cd Naturieux.fr
 
 # Installer les dependances
 go mod download
@@ -115,12 +115,12 @@ GET /health
 | Module | Couverture |
 |--------|------------|
 | species | 100% |
-| inaturalist | 91.5% |
+| inaturalist | 92.7% |
 | gamification | 81% |
+| application/quiz | 81.9% |
 | quiz domain | 77.5% |
-| application/quiz | 75.4% |
 | http handlers | 60.5% |
-| **Total** | **72.1%** |
+| **Total** | **73.8%** |
 
 ## API iNaturalist
 

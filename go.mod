@@ -1,5 +1,5 @@
-module github.com/fieve/naturieux
+module github.com/Naturieux-fr/Naturieux.fr
 
-go 1.24.5
+go 1.22
 
 require github.com/google/uuid v1.6.0

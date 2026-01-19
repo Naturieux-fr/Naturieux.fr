@@ -4,7 +4,7 @@ package ports
 import (
 	"context"
 
-	"github.com/fieve/naturieux/internal/domain/species"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
 )
 
 // SpeciesFilter defines filtering options for species queries.

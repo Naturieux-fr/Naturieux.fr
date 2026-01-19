@@ -3,7 +3,7 @@ package gamification_test
 import (
 	"testing"
 
-	"github.com/fieve/naturieux/internal/domain/gamification"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 )
 
 func TestNewPlayer(t *testing.T) {
