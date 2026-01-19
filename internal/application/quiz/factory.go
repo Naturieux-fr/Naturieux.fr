@@ -158,7 +158,11 @@ func (f *questionFactory) fetchSimilarSpecies(ctx context.Context, speciesID, co
 }
 
 // fetchRandomSpecies retrieves random species from the same taxon.
-func (f *questionFactory) fetchRandomSpecies(ctx context.Context, correct *species.Species, count int) ([]*species.Species, error) {
+func (f *questionFactory) fetchRandomSpecies(
+	ctx context.Context,
+	correct *species.Species,
+	count int,
+) ([]*species.Species, error) {
 	filter := ports.SpeciesFilter{
 		IconicTaxon: correct.IconicTaxon(),
 		Limit:       count + 5,

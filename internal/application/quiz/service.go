@@ -13,12 +13,12 @@ import (
 
 // Default values for session configuration.
 const (
-	defaultQuestionCount = 10
-	accuracyBonusHigh    = 100
-	accuracyBonusMedium  = 50
+	defaultQuestionCount    = 10
+	accuracyBonusHigh       = 100
+	accuracyBonusMedium     = 50
 	accuracyThresholdHigh   = 90
 	accuracyThresholdMedium = 80
-	streakXPMultiplier   = 10
+	streakXPMultiplier      = 10
 )
 
 // Service handles quiz game logic and orchestration.
