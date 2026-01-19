@@ -1,0 +1,62 @@
+# Labels for quality management (use with github-label-sync)
+# Install: npm install -g github-label-sync
+# Run: github-label-sync --access-token <token> <owner>/<repo>
+
+# Priority labels
+- name: "priority:critical"
+  color: "b60205"
+  description: "Critical priority - fix immediately"
+
+- name: "priority:high"
+  color: "d93f0b"
+  description: "High priority - fix this sprint"
+
+- name: "priority:medium"
+  color: "fbca04"
+  description: "Medium priority - fix when possible"
+
+- name: "priority:low"
+  color: "0e8a16"
+  description: "Low priority - nice to have"
+
+# Type labels
+- name: "quality"
+  color: "7057ff"
+  description: "Code quality issue"
+
+- name: "security"
+  color: "d73a4a"
+  description: "Security vulnerability"
+
+- name: "coverage"
+  color: "1d76db"
+  description: "Test coverage issue"
+
+- name: "refactoring"
+  color: "a2eeef"
+  description: "Code needs refactoring"
+
+- name: "bug"
+  color: "d73a4a"
+  description: "Something isn't working"
+
+- name: "dependencies"
+  color: "0366d6"
+  description: "Dependency update needed"
+
+- name: "automated"
+  color: "e4e669"
+  description: "Auto-generated issue"
+
+# Status labels
+- name: "needs-triage"
+  color: "ededed"
+  description: "Needs review and prioritization"
+
+- name: "in-progress"
+  color: "0052cc"
+  description: "Being worked on"
+
+- name: "blocked"
+  color: "b60205"
+  description: "Blocked by external factor"

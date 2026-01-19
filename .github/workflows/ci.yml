@@ -1,0 +1,273 @@
+name: CI - Quality Analysis
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  GO_VERSION: '1.22'
+  MIN_COVERAGE: 70
+
+jobs:
+  # Job 1: Tests et Couverture
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests with coverage
+        run: |
+          go test ./... -coverprofile=coverage.out -covermode=atomic -race -v 2>&1 | tee test-output.txt
+
+      - name: Calculate coverage percentage
+        id: coverage
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "Coverage: $COVERAGE%"
+
+      - name: Check minimum coverage
+        run: |
+          COVERAGE=${{ steps.coverage.outputs.coverage }}
+          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+            echo "::error::Coverage ($COVERAGE%) is below minimum ($MIN_COVERAGE%)"
+            exit 1
+          fi
+          echo "Coverage OK: $COVERAGE% >= $MIN_COVERAGE%"
+
+      - name: Generate coverage report
+        run: |
+          go tool cover -html=coverage.out -o coverage.html
+          go tool cover -func=coverage.out > coverage-report.txt
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.html
+            coverage-report.txt
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          fail_ci_if_error: false
+          verbose: true
+
+  # Job 2: Analyse statique avec golangci-lint
+  lint:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci-lint/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m --out-format=colored-line-number
+
+      - name: Run golangci-lint (JSON for artifacts)
+        if: always()
+        run: |
+          golangci-lint run --out-format=json > lint-report.json || true
+          golangci-lint run --out-format=checkstyle > lint-report.xml || true
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: |
+            lint-report.json
+            lint-report.xml
+
+  # Job 3: Analyse de securite
+  security:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run gosec security scanner
+        uses: securego/gosec@master
+        with:
+          args: '-fmt json -out gosec-report.json -stdout -verbose=text ./...'
+
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: gosec-report.json
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... 2>&1 | tee vuln-report.txt || true
+
+      - name: Upload vulnerability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnerability-report
+          path: vuln-report.txt
+
+  # Job 4: Build
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build
+        run: |
+          go build -v -o bin/server ./cmd/server
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binary
+          path: bin/server
+
+  # Job 5: Rapport de qualite sur PR
+  quality-report:
+    name: Quality Report
+    runs-on: ubuntu-latest
+    needs: [test, lint, security]
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage
+
+      - name: Download lint report
+        uses: actions/download-artifact@v4
+        with:
+          name: lint-report
+          path: ./lint
+
+      - name: Download security report
+        uses: actions/download-artifact@v4
+        with:
+          name: security-report
+          path: ./security
+
+      - name: Generate quality report
+        id: report
+        run: |
+          # Coverage
+          COVERAGE=$(cat ./coverage/coverage-report.txt | grep total | awk '{print $3}')
+
+          # Count lint issues
+          LINT_ISSUES=$(cat ./lint/lint-report.json | jq '.Issues | length' 2>/dev/null || echo "0")
+
+          # Count security issues
+          SEC_ISSUES=$(cat ./security/gosec-report.json | jq '.Issues | length' 2>/dev/null || echo "0")
+
+          # Generate markdown report
+          cat << EOF > quality-report.md
+          ## Quality Report
+
+          | Metric | Value | Status |
+          |--------|-------|--------|
+          | Coverage | $COVERAGE | $([[ "${COVERAGE%\%}" > "70" ]] && echo "✅" || echo "❌") |
+          | Lint Issues | $LINT_ISSUES | $([[ "$LINT_ISSUES" == "0" ]] && echo "✅" || echo "⚠️") |
+          | Security Issues | $SEC_ISSUES | $([[ "$SEC_ISSUES" == "0" ]] && echo "✅" || echo "❌") |
+
+          ### Coverage by Package
+          \`\`\`
+          $(cat ./coverage/coverage-report.txt)
+          \`\`\`
+
+          ---
+          *Generated by Naturieux CI*
+          EOF
+
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          cat quality-report.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with quality report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = `${{ steps.report.outputs.report }}`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Quality Report')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: report
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: report
+              });
+            }

@@ -1,0 +1,371 @@
+name: Security Analysis
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run daily at 2am
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.22'
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  # SAST - Static Application Security Testing
+  sast:
+    name: SAST Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Gosec - Go Security Checker
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
+
+      - name: Upload gosec SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gosec-results.sarif
+          category: gosec
+
+      # Generate detailed report
+      - name: Generate gosec detailed report
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -fmt=json -out=gosec-detailed.json ./... || true
+          gosec -fmt=text -out=gosec-report.txt ./... || true
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gosec-reports
+          path: |
+            gosec-detailed.json
+            gosec-report.txt
+
+  # SCA - Software Composition Analysis
+  sca:
+    name: Dependency Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Govulncheck - Official Go vulnerability checker
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck -format sarif ./... > govuln-results.sarif 2>&1 || true
+          govulncheck ./... > govuln-report.txt 2>&1 || true
+
+      - name: Upload govulncheck SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: govuln-results.sarif
+          category: govulncheck
+
+      # Nancy - Dependency vulnerability scanner
+      - name: Run nancy
+        run: |
+          go install github.com/sonatype-nexus-community/nancy@latest
+          go list -json -deps ./... | nancy sleuth -o json > nancy-report.json 2>&1 || true
+          go list -json -deps ./... | nancy sleuth > nancy-report.txt 2>&1 || true
+
+      - name: Upload SCA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-reports
+          path: |
+            govuln-report.txt
+            nancy-report.json
+            nancy-report.txt
+
+  # Secret Scanning
+  secrets:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Gitleaks - Secret detection
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: true
+
+      # TruffleHog - Additional secret scanning
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          extra_args: --only-verified
+
+  # License Compliance
+  license:
+    name: License Compliance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check licenses
+        run: |
+          go install github.com/google/go-licenses@latest
+          go-licenses check ./... 2>&1 | tee license-report.txt || true
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: license-report.txt
+
+  # CodeQL Analysis
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          queries: +security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:go"
+
+  # Security Report & Issues
+  report:
+    name: Security Report
+    runs-on: ubuntu-latest
+    needs: [sast, sca, secrets, license]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./reports
+
+      - name: Generate security summary
+        id: summary
+        run: |
+          mkdir -p security-summary
+
+          # Count gosec issues
+          GOSEC_ISSUES=0
+          GOSEC_HIGH=0
+          GOSEC_MEDIUM=0
+          if [ -f reports/gosec-reports/gosec-detailed.json ]; then
+            GOSEC_ISSUES=$(cat reports/gosec-reports/gosec-detailed.json | jq '.Issues | length' 2>/dev/null || echo "0")
+            GOSEC_HIGH=$(cat reports/gosec-reports/gosec-detailed.json | jq '[.Issues[] | select(.severity == "HIGH")] | length' 2>/dev/null || echo "0")
+            GOSEC_MEDIUM=$(cat reports/gosec-reports/gosec-detailed.json | jq '[.Issues[] | select(.severity == "MEDIUM")] | length' 2>/dev/null || echo "0")
+          fi
+
+          # Check govulncheck
+          VULN_COUNT=0
+          if [ -f reports/sca-reports/govuln-report.txt ]; then
+            VULN_COUNT=$(grep -c "Vulnerability" reports/sca-reports/govuln-report.txt 2>/dev/null || echo "0")
+          fi
+
+          # Generate report
+          cat << EOF > SECURITY_REPORT.md
+          # Security Report
+
+          > Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          ## Summary
+
+          | Category | Issues | Status |
+          |----------|--------|--------|
+          | SAST (gosec) | $GOSEC_ISSUES | $([[ "$GOSEC_HIGH" -eq 0 ]] && echo "✅" || echo "❌") |
+          | High Severity | $GOSEC_HIGH | $([[ "$GOSEC_HIGH" -eq 0 ]] && echo "✅" || echo "❌") |
+          | Medium Severity | $GOSEC_MEDIUM | $([[ "$GOSEC_MEDIUM" -le 5 ]] && echo "✅" || echo "⚠️") |
+          | Vulnerabilities | $VULN_COUNT | $([[ "$VULN_COUNT" -eq 0 ]] && echo "✅" || echo "❌") |
+
+          ## SAST Results (gosec)
+
+          \`\`\`
+          $(cat reports/gosec-reports/gosec-report.txt 2>/dev/null || echo "No issues found")
+          \`\`\`
+
+          ## Dependency Vulnerabilities
+
+          \`\`\`
+          $(cat reports/sca-reports/govuln-report.txt 2>/dev/null || echo "No vulnerabilities found")
+          \`\`\`
+
+          ## License Compliance
+
+          \`\`\`
+          $(cat reports/license-report/license-report.txt 2>/dev/null || echo "All licenses compliant")
+          \`\`\`
+
+          ---
+          *Generated by Security Analysis workflow*
+          EOF
+
+          echo "gosec_high=$GOSEC_HIGH" >> $GITHUB_OUTPUT
+          echo "vuln_count=$VULN_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary
+          path: SECURITY_REPORT.md
+
+      # Create issues for critical findings
+      - name: Create security issues
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const gosecHigh = parseInt('${{ steps.summary.outputs.gosec_high }}') || 0;
+            const vulnCount = parseInt('${{ steps.summary.outputs.vuln_count }}') || 0;
+
+            // Check for existing security issues
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,automated'
+            });
+
+            // Create issue for high severity findings
+            if (gosecHigh > 0) {
+              const hasExisting = existingIssues.some(i =>
+                i.title.includes('High Severity Security')
+              );
+
+              if (!hasExisting) {
+                let gosecReport = 'Unable to read report';
+                try {
+                  gosecReport = fs.readFileSync('reports/gosec-reports/gosec-report.txt', 'utf8');
+                } catch (e) {}
+
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: '🚨 High Severity Security Issues Detected',
+                  body: `## Security Alert
+
+            Found **${gosecHigh}** high-severity security issues in the codebase.
+
+            ### Details
+            \`\`\`
+            ${gosecReport.substring(0, 3000)}
+            \`\`\`
+
+            ### Required Actions
+            1. Review each finding immediately
+            2. Fix or document false positives
+            3. Do not deploy until resolved
+
+            ---
+            *Auto-generated by Security Analysis*`,
+                  labels: ['security', 'automated', 'priority:critical']
+                });
+              }
+            }
+
+            // Create issue for vulnerabilities
+            if (vulnCount > 0) {
+              const hasExisting = existingIssues.some(i =>
+                i.title.includes('Dependency Vulnerabilities')
+              );
+
+              if (!hasExisting) {
+                let vulnReport = 'Unable to read report';
+                try {
+                  vulnReport = fs.readFileSync('reports/sca-reports/govuln-report.txt', 'utf8');
+                } catch (e) {}
+
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: '📦 Dependency Vulnerabilities Found',
+                  body: `## Vulnerability Alert
+
+            Found **${vulnCount}** known vulnerabilities in dependencies.
+
+            ### Details
+            \`\`\`
+            ${vulnReport.substring(0, 3000)}
+            \`\`\`
+
+            ### Required Actions
+            1. Update affected dependencies
+            2. Run \`go get -u ./...\` to update
+            3. Review changelog for breaking changes
+
+            ---
+            *Auto-generated by Security Analysis*`,
+                  labels: ['security', 'dependencies', 'automated']
+                });
+              }
+            }
+
+      # Update Security Report in repo
+      - name: Commit security report
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add SECURITY_REPORT.md || true
+          git diff --staged --quiet || git commit -m "docs: update security report [skip ci]"
+          git push || true

@@ -1,0 +1,252 @@
+name: PR Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  GO_VERSION: '1.22'
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  review:
+    name: Automated Code Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      # Get changed files
+      - name: Get changed Go files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.go
+
+      # Run reviewdog with golangci-lint for inline comments
+      - name: Run golangci-lint with reviewdog
+        uses: reviewdog/action-golangci-lint@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          golangci_lint_flags: "--config=.golangci.yml --new-from-rev=${{ github.event.pull_request.base.sha }}"
+          reporter: github-pr-review
+          filter_mode: nofilter
+          fail_on_error: false
+          level: warning
+
+      # Run staticcheck with reviewdog
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck with reviewdog
+        uses: reviewdog/action-staticcheck@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          filter_mode: nofilter
+          fail_on_error: false
+          level: warning
+
+      # Run gosec for security issues
+      - name: Run gosec with reviewdog
+        uses: reviewdog/action-gosec@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          level: warning
+
+      # Coverage diff check
+      - name: Run tests with coverage
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          go test ./... -coverprofile=coverage.out -covermode=atomic
+
+      - name: Check coverage diff
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+
+            // Get coverage for changed packages
+            const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ');
+            const changedPackages = [...new Set(changedFiles.map(f => {
+              const parts = f.split('/');
+              parts.pop();
+              return parts.join('/');
+            }))].filter(p => p);
+
+            if (changedPackages.length === 0) return;
+
+            // Parse coverage
+            const coverageOutput = execSync('go tool cover -func=coverage.out').toString();
+            const lines = coverageOutput.split('\n');
+
+            const lowCoverage = [];
+            for (const pkg of changedPackages) {
+              for (const line of lines) {
+                if (line.includes(pkg) && !line.includes('total:')) {
+                  const match = line.match(/(\d+\.\d+)%$/);
+                  if (match) {
+                    const coverage = parseFloat(match[1]);
+                    if (coverage < 70) {
+                      const funcMatch = line.match(/^(.+?):(\d+):\s+(\S+)/);
+                      if (funcMatch) {
+                        lowCoverage.push({
+                          file: funcMatch[1],
+                          line: parseInt(funcMatch[2]),
+                          func: funcMatch[3],
+                          coverage
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            if (lowCoverage.length > 0) {
+              // Create review comments for low coverage
+              const comments = lowCoverage.slice(0, 10).map(item => ({
+                path: item.file,
+                line: item.line,
+                body: `⚠️ **Low Coverage**: Function \`${item.func}\` has only ${item.coverage}% coverage. Consider adding more tests.`
+              }));
+
+              // Post review with comments
+              try {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  event: 'COMMENT',
+                  body: `## Coverage Analysis\n\nFound ${lowCoverage.length} functions with coverage below 70% in changed files.`,
+                  comments: comments.filter(c => c.path && c.line)
+                });
+              } catch (e) {
+                console.log('Could not create review comments:', e.message);
+              }
+            }
+
+      # Complexity check
+      - name: Check complexity
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+
+            try {
+              // Install gocyclo
+              execSync('go install github.com/fzipp/gocyclo/cmd/gocyclo@latest');
+
+              // Run complexity check
+              const result = execSync('gocyclo -over 15 . 2>&1 || true').toString();
+              const lines = result.trim().split('\n').filter(l => l);
+
+              if (lines.length > 0) {
+                const complexFuncs = lines.slice(0, 10).map(line => {
+                  const match = line.match(/^(\d+)\s+(\S+)\s+(.+):(\d+)/);
+                  if (match) {
+                    return {
+                      complexity: parseInt(match[1]),
+                      func: match[2],
+                      file: match[3],
+                      line: parseInt(match[4])
+                    };
+                  }
+                  return null;
+                }).filter(f => f);
+
+                if (complexFuncs.length > 0) {
+                  const body = `## ⚠️ High Complexity Functions
+
+            The following functions have cyclomatic complexity > 15:
+
+            | Function | Complexity | Location |
+            |----------|------------|----------|
+            ${complexFuncs.map(f => `| \`${f.func}\` | ${f.complexity} | ${f.file}:${f.line} |`).join('\n')}
+
+            Consider refactoring these functions to improve maintainability.`;
+
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.payload.pull_request.number,
+                    body: body
+                  });
+                }
+              }
+            } catch (e) {
+              console.log('Complexity check failed:', e.message);
+            }
+
+  # Duplicate code detection
+  duplicates:
+    name: Duplicate Code Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dupl
+        run: go install github.com/mibk/dupl@latest
+
+      - name: Check for duplicates
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+
+            try {
+              const result = execSync('dupl -t 50 -html . 2>&1 || true').toString();
+
+              // Check if significant duplicates found
+              const duplicateCount = (result.match(/found \d+ clones/i) || ['found 0 clones'])[0];
+              const count = parseInt(duplicateCount.match(/\d+/)[0]);
+
+              if (count > 5) {
+                const body = `## 📋 Code Duplication Detected
+
+            Found **${count}** duplicate code blocks (threshold: 50 tokens).
+
+            Run \`dupl -t 50 .\` locally to see details.
+
+            ### Suggestions
+            - Extract common code into shared functions
+            - Use generics for similar logic
+            - Consider creating utility packages`;
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body: body
+                });
+              }
+            } catch (e) {
+              console.log('Duplicate check failed:', e.message);
+            }
