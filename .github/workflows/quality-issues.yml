@@ -33,402 +33,456 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      # Coverage Analysis
+      # Install all analysis tools
+      - name: Install analysis tools
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+          go install github.com/uudashr/gocognit/cmd/gocognit@latest
+          go install github.com/mibk/dupl@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/gordonklaus/ineffassign@latest
+          go install github.com/kisielk/errcheck@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      # Run all analyses
       - name: Run tests with coverage
         run: |
-          go test ./... -coverprofile=coverage.out -covermode=atomic 2>&1 | tee test-output.txt
-          go tool cover -func=coverage.out > coverage-report.txt
-
-      # Static Analysis
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+          go test ./... -coverprofile=coverage.out -covermode=atomic 2>&1 | tee test-output.txt || true
+          go tool cover -func=coverage.out > coverage-report.txt || true
 
       - name: Run golangci-lint
         continue-on-error: true
-        run: |
-          golangci-lint run --out-format=json > lint-report.json || true
-
-      # Security Analysis
-      - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: golangci-lint run --out-format=json > lint-report.json || true
 
       - name: Run gosec
         continue-on-error: true
-        run: |
-          gosec -fmt=json -out=gosec-report.json ./... || true
+        run: gosec -fmt=json -out=gosec-report.json ./... || true
 
-      # Vulnerability Check
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Run govulncheck
+      - name: Run complexity analysis
         continue-on-error: true
         run: |
-          govulncheck -json ./... > vuln-report.json 2>&1 || true
+          gocyclo -over 10 . > cyclo-report.txt 2>&1 || true
+          gocognit -over 15 . > cognit-report.txt 2>&1 || true
 
-      # Create Issues
-      - name: Create coverage issues
+      - name: Run duplication analysis
+        continue-on-error: true
+        run: dupl -t 40 -plumbing . > dupl-report.txt 2>&1 || true
+
+      - name: Run ineffassign
+        continue-on-error: true
+        run: ineffassign ./... > ineffassign-report.txt 2>&1 || true
+
+      - name: Run errcheck
+        continue-on-error: true
+        run: errcheck -asserts -blank ./... > errcheck-report.txt 2>&1 || true
+
+      - name: Run staticcheck
+        continue-on-error: true
+        run: staticcheck -f json ./... > staticcheck-report.json 2>&1 || true
+
+      # Create comprehensive issues
+      - name: Create Quality Issues
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
 
-            // Read coverage report
-            const coverageReport = fs.readFileSync('coverage-report.txt', 'utf8');
-            const lines = coverageReport.split('\n');
-
-            // Parse coverage per package
-            const lowCoveragePackages = [];
-            for (const line of lines) {
-              const match = line.match(/^(.+?)\s+(\d+\.\d+)%$/);
-              if (match && match[1] !== 'total:') {
-                const pkg = match[1].trim();
-                const coverage = parseFloat(match[2]);
-                if (coverage < 70 && coverage > 0) {
-                  lowCoveragePackages.push({ pkg, coverage });
-                }
-              }
-            }
-
-            // Create issue for low coverage
-            if (lowCoveragePackages.length > 0) {
-              const existingIssues = await github.rest.issues.listForRepo({
+            // Helper to check if issue exists
+            async function issueExists(title, labels) {
+              const { data: issues } = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 state: 'open',
-                labels: 'quality,coverage'
+                labels: labels.join(',')
               });
+              return issues.some(i => i.title.includes(title));
+            }
 
-              const issueExists = existingIssues.data.some(issue =>
-                issue.title.includes('Low Test Coverage')
-              );
-
-              if (!issueExists) {
-                const body = `## Low Test Coverage Detected
-
-            The following packages have test coverage below 70%:
-
-            | Package | Coverage |
-            |---------|----------|
-            ${lowCoveragePackages.map(p => `| \`${p.pkg}\` | ${p.coverage}% |`).join('\n')}
-
-            ### Suggested Actions
-            - Add unit tests for uncovered code paths
-            - Focus on critical business logic first
-            - Use table-driven tests for better coverage
-
-            ---
-            *Auto-generated by Quality Analysis*`;
-
-                await github.rest.issues.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title: '📊 Low Test Coverage in Multiple Packages',
-                  body: body,
-                  labels: ['quality', 'coverage', 'automated']
-                });
+            // Helper to create issue
+            async function createIssue(title, body, labels) {
+              if (await issueExists(title, labels)) {
+                console.log(`Issue already exists: ${title}`);
+                return;
               }
-            }
-
-      - name: Create lint issues
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-
-            let lintReport;
-            try {
-              lintReport = JSON.parse(fs.readFileSync('lint-report.json', 'utf8'));
-            } catch (e) {
-              console.log('No lint issues found');
-              return;
-            }
-
-            if (!lintReport.Issues || lintReport.Issues.length === 0) {
-              console.log('No lint issues');
-              return;
-            }
-
-            // Group issues by severity/linter
-            const criticalIssues = lintReport.Issues.filter(i =>
-              ['gosec', 'errcheck', 'staticcheck'].includes(i.FromLinter)
-            );
-
-            const codeSmells = lintReport.Issues.filter(i =>
-              ['dupl', 'gocyclo', 'gocognit', 'funlen'].includes(i.FromLinter)
-            );
-
-            // Create issue for critical problems
-            if (criticalIssues.length > 0) {
-              const existingIssues = await github.rest.issues.listForRepo({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                labels: 'quality,bug'
-              });
-
-              const issueExists = existingIssues.data.some(issue =>
-                issue.title.includes('Critical Code Issues')
-              );
-
-              if (!issueExists) {
-                const issuesList = criticalIssues.slice(0, 20).map(issue => {
-                  return `- **${issue.FromLinter}**: ${issue.Text}
-              - File: \`${issue.Pos.Filename}:${issue.Pos.Line}\``;
-                }).join('\n');
-
-                const body = `## Critical Code Issues Detected
-
-            Found ${criticalIssues.length} critical issues that need attention:
-
-            ${issuesList}
-
-            ${criticalIssues.length > 20 ? `\n*...and ${criticalIssues.length - 20} more issues*` : ''}
-
-            ### Priority
-            These issues may cause bugs or security vulnerabilities. Please fix them as soon as possible.
-
-            ---
-            *Auto-generated by Quality Analysis*`;
-
-                await github.rest.issues.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title: '🐛 Critical Code Issues Found',
-                  body: body,
-                  labels: ['quality', 'bug', 'automated', 'priority:high']
-                });
-              }
-            }
-
-            // Create issue for code smells
-            if (codeSmells.length > 5) {
-              const existingIssues = await github.rest.issues.listForRepo({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                labels: 'quality,refactoring'
-              });
-
-              const issueExists = existingIssues.data.some(issue =>
-                issue.title.includes('Code Complexity')
-              );
-
-              if (!issueExists) {
-                const smellsList = codeSmells.slice(0, 10).map(issue => {
-                  return `- **${issue.FromLinter}**: ${issue.Text}
-              - File: \`${issue.Pos.Filename}:${issue.Pos.Line}\``;
-                }).join('\n');
-
-                const body = `## Code Complexity Issues
-
-            Found ${codeSmells.length} code smells that should be refactored:
-
-            ${smellsList}
-
-            ${codeSmells.length > 10 ? `\n*...and ${codeSmells.length - 10} more issues*` : ''}
-
-            ### Suggested Actions
-            - Break down large functions into smaller ones
-            - Reduce cyclomatic complexity
-            - Extract duplicated code into shared functions
-
-            ---
-            *Auto-generated by Quality Analysis*`;
-
-                await github.rest.issues.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title: '🔧 Code Complexity Issues Need Refactoring',
-                  body: body,
-                  labels: ['quality', 'refactoring', 'automated', 'priority:medium']
-                });
-              }
-            }
-
-      - name: Create security issues
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-
-            let secReport;
-            try {
-              secReport = JSON.parse(fs.readFileSync('gosec-report.json', 'utf8'));
-            } catch (e) {
-              console.log('No security report found');
-              return;
-            }
-
-            if (!secReport.Issues || secReport.Issues.length === 0) {
-              console.log('No security issues');
-              return;
-            }
-
-            // Group by severity
-            const highSeverity = secReport.Issues.filter(i => i.severity === 'HIGH');
-            const mediumSeverity = secReport.Issues.filter(i => i.severity === 'MEDIUM');
-
-            if (highSeverity.length > 0) {
-              const existingIssues = await github.rest.issues.listForRepo({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                labels: 'security,priority:critical'
-              });
-
-              const issueExists = existingIssues.data.some(issue =>
-                issue.title.includes('Security Vulnerabilities')
-              );
-
-              if (!issueExists) {
-                const issuesList = highSeverity.map(issue => {
-                  return `### ${issue.rule_id}: ${issue.details}
-            - **Severity**: ${issue.severity}
-            - **Confidence**: ${issue.confidence}
-            - **File**: \`${issue.file}:${issue.line}\`
-            - **Code**: \`${issue.code}\``;
-                }).join('\n\n');
-
-                const body = `## 🚨 Security Vulnerabilities Detected
-
-            Found ${highSeverity.length} HIGH severity security issues:
-
-            ${issuesList}
-
-            ### Immediate Actions Required
-            - Review and fix these vulnerabilities immediately
-            - Do not deploy to production until resolved
-            - Consider security review of related code
-
-            ---
-            *Auto-generated by Security Analysis*`;
-
-                await github.rest.issues.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title: '🚨 Security Vulnerabilities Found - Immediate Action Required',
-                  body: body,
-                  labels: ['security', 'automated', 'priority:critical']
-                });
-              }
-            }
-
-            if (mediumSeverity.length > 0) {
-              const existingIssues = await github.rest.issues.listForRepo({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                labels: 'security,priority:high'
-              });
-
-              const issueExists = existingIssues.data.some(issue =>
-                issue.title.includes('Security Warnings')
-              );
-
-              if (!issueExists) {
-                const issuesList = mediumSeverity.slice(0, 10).map(issue => {
-                  return `- **${issue.rule_id}**: ${issue.details}
-              - File: \`${issue.file}:${issue.line}\``;
-                }).join('\n');
-
-                const body = `## ⚠️ Security Warnings
-
-            Found ${mediumSeverity.length} MEDIUM severity security issues:
-
-            ${issuesList}
-
-            ${mediumSeverity.length > 10 ? `\n*...and ${mediumSeverity.length - 10} more issues*` : ''}
-
-            ### Recommended Actions
-            - Review these issues in the next sprint
-            - Implement security best practices
-            - Add input validation where needed
-
-            ---
-            *Auto-generated by Security Analysis*`;
-
-                await github.rest.issues.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title: '⚠️ Security Warnings Need Attention',
-                  body: body,
-                  labels: ['security', 'automated', 'priority:high']
-                });
-              }
-            }
-
-      - name: Create vulnerability issues
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-
-            let vulnReport;
-            try {
-              const content = fs.readFileSync('vuln-report.json', 'utf8');
-              // govulncheck outputs multiple JSON objects, parse line by line
-              const lines = content.split('\n').filter(l => l.trim());
-              const vulns = [];
-              for (const line of lines) {
-                try {
-                  const obj = JSON.parse(line);
-                  if (obj.vulnerability) {
-                    vulns.push(obj.vulnerability);
-                  }
-                } catch (e) {}
-              }
-              vulnReport = vulns;
-            } catch (e) {
-              console.log('No vulnerability report found');
-              return;
-            }
-
-            if (vulnReport.length === 0) {
-              console.log('No vulnerabilities found');
-              return;
-            }
-
-            const existingIssues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'security,dependencies'
-            });
-
-            const issueExists = existingIssues.data.some(issue =>
-              issue.title.includes('Vulnerable Dependencies')
-            );
-
-            if (!issueExists) {
-              const vulnList = vulnReport.slice(0, 10).map(vuln => {
-                return `### ${vuln.id || 'Unknown'}
-            - **Package**: ${vuln.module_path || 'Unknown'}
-            - **Description**: ${vuln.details || 'No details'}`;
-              }).join('\n\n');
-
-              const body = `## 📦 Vulnerable Dependencies Detected
-
-            Found ${vulnReport.length} known vulnerabilities in dependencies:
-
-            ${vulnList}
-
-            ${vulnReport.length > 10 ? `\n*...and ${vulnReport.length - 10} more vulnerabilities*` : ''}
-
-            ### Recommended Actions
-            - Run \`go get -u ./...\` to update dependencies
-            - Check for breaking changes before updating
-            - Review security advisories for each vulnerability
-
-            ---
-            *Auto-generated by Vulnerability Scanner*`;
-
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: '📦 Vulnerable Dependencies Need Update',
+                title: title,
                 body: body,
-                labels: ['security', 'dependencies', 'automated']
+                labels: labels
               });
+              console.log(`Created issue: ${title}`);
             }
+
+            // ============================================
+            // 1. COVERAGE ANALYSIS
+            // ============================================
+            try {
+              const coverageReport = fs.readFileSync('coverage-report.txt', 'utf8');
+              const lines = coverageReport.split('\n');
+              const lowCoverage = [];
+              const uncoveredFuncs = [];
+
+              for (const line of lines) {
+                const funcMatch = line.match(/^(.+?):(\d+):\s+(\S+)\s+(\d+\.\d+)%$/);
+                if (funcMatch) {
+                  const [, file, lineNum, func, coverage] = funcMatch;
+                  const cov = parseFloat(coverage);
+                  if (cov === 0) {
+                    uncoveredFuncs.push({ file, line: lineNum, func });
+                  } else if (cov < 50) {
+                    lowCoverage.push({ file, line: lineNum, func, coverage: cov });
+                  }
+                }
+              }
+
+              // Issue for uncovered functions
+              if (uncoveredFuncs.length > 0) {
+                const list = uncoveredFuncs.slice(0, 15).map(f =>
+                  `| \`${f.func}\` | ${f.file}:${f.line} | 0% |`
+                ).join('\n');
+
+                await createIssue(
+                  '🧪 Uncovered Functions Need Tests',
+                  `## Code Coverage Issue\n\nFound **${uncoveredFuncs.length}** functions with **0% test coverage**.\n\n| Function | Location | Coverage |\n|----------|----------|----------|\n${list}\n${uncoveredFuncs.length > 15 ? `\n*...and ${uncoveredFuncs.length - 15} more*` : ''}\n\n### Why This Matters\n- Untested code is a risk for production bugs\n- Changes to these functions can't be verified\n- Technical debt accumulates over time\n\n### Suggested Actions\n1. Write unit tests for critical business logic first\n2. Use table-driven tests for comprehensive coverage\n3. Mock external dependencies\n\n---\n*Auto-generated by Quality Analysis*`,
+                  ['quality', 'testing', 'automated']
+                );
+              }
+
+              // Issue for low coverage
+              if (lowCoverage.length > 5) {
+                const list = lowCoverage.slice(0, 10).map(f =>
+                  `| \`${f.func}\` | ${f.file}:${f.line} | ${f.coverage}% |`
+                ).join('\n');
+
+                await createIssue(
+                  '📊 Low Test Coverage in Functions',
+                  `## Coverage Below 50%\n\nFound **${lowCoverage.length}** functions with coverage below 50%.\n\n| Function | Location | Coverage |\n|----------|----------|----------|\n${list}\n\n### Suggested Actions\n- Add edge case tests\n- Test error paths\n- Consider boundary conditions\n\n---\n*Auto-generated by Quality Analysis*`,
+                  ['quality', 'testing', 'automated', 'priority:medium']
+                );
+              }
+            } catch (e) {
+              console.log('Coverage analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 2. CYCLOMATIC COMPLEXITY
+            // ============================================
+            try {
+              const cycloReport = fs.readFileSync('cyclo-report.txt', 'utf8');
+              const cycloLines = cycloReport.trim().split('\n').filter(l => l);
+
+              if (cycloLines.length > 0) {
+                const complexFuncs = cycloLines.slice(0, 15).map(line => {
+                  const match = line.match(/^(\d+)\s+(\S+)\s+(.+):(\d+)/);
+                  if (match) {
+                    return { complexity: match[1], func: match[2], file: match[3], line: match[4] };
+                  }
+                  return null;
+                }).filter(f => f);
+
+                if (complexFuncs.length > 0) {
+                  const list = complexFuncs.map(f =>
+                    `| \`${f.func}\` | ${f.file}:${f.line} | **${f.complexity}** |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '🔀 High Cyclomatic Complexity',
+                    `## Complex Functions Detected\n\nFound **${cycloLines.length}** functions with cyclomatic complexity > 10.\n\n| Function | Location | Complexity |\n|----------|----------|------------|\n${list}\n\n### What is Cyclomatic Complexity?\nIt measures the number of independent paths through code. High values indicate:\n- Difficult to test\n- Hard to understand\n- Prone to bugs\n\n### Refactoring Suggestions\n1. **Extract methods** - Break large functions into smaller ones\n2. **Use early returns** - Reduce nesting with guard clauses\n3. **Replace conditionals** - Use polymorphism or strategy pattern\n4. **Simplify boolean logic** - Extract complex conditions\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['quality', 'refactoring', 'automated', 'code-smell']
+                  );
+                }
+              }
+            } catch (e) {
+              console.log('Complexity analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 3. COGNITIVE COMPLEXITY
+            // ============================================
+            try {
+              const cognitReport = fs.readFileSync('cognit-report.txt', 'utf8');
+              const cognitLines = cognitReport.trim().split('\n').filter(l => l);
+
+              if (cognitLines.length > 3) {
+                const hardToRead = cognitLines.slice(0, 10).map(line => {
+                  const match = line.match(/^(\d+)\s+(\S+)\s+(.+):(\d+)/);
+                  if (match) {
+                    return { complexity: match[1], func: match[2], file: match[3], line: match[4] };
+                  }
+                  return null;
+                }).filter(f => f);
+
+                if (hardToRead.length > 0) {
+                  const list = hardToRead.map(f =>
+                    `| \`${f.func}\` | ${f.file}:${f.line} | **${f.complexity}** |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '🧠 Hard to Read Functions',
+                    `## High Cognitive Complexity\n\nFound **${cognitLines.length}** functions that are hard to understand (cognitive complexity > 15).\n\n| Function | Location | Cognitive Complexity |\n|----------|----------|---------------------|\n${list}\n\n### Why This Matters\nCognitive complexity measures how hard code is for humans to understand:\n- Nested loops and conditions\n- Multiple breaks/continues\n- Complex boolean expressions\n\n### Suggested Fixes\n1. Flatten nested structures\n2. Extract helper functions with descriptive names\n3. Use early returns to reduce indentation\n4. Replace magic values with named constants\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['quality', 'readability', 'automated', 'code-smell']
+                  );
+                }
+              }
+            } catch (e) {
+              console.log('Cognitive complexity skipped:', e.message);
+            }
+
+            // ============================================
+            // 4. CODE DUPLICATION
+            // ============================================
+            try {
+              const duplReport = fs.readFileSync('dupl-report.txt', 'utf8');
+              const duplLines = duplReport.trim().split('\n').filter(l => l);
+              const duplCount = duplLines.length;
+
+              if (duplCount > 10) {
+                // Parse duplication blocks
+                const duplicates = [];
+                let currentBlock = null;
+
+                for (const line of duplLines) {
+                  const match = line.match(/^(.+):(\d+)-(\d+):\s*(\d+)\s+lines/);
+                  if (match) {
+                    duplicates.push({
+                      file: match[1],
+                      startLine: match[2],
+                      endLine: match[3],
+                      lines: match[4]
+                    });
+                  }
+                }
+
+                const list = duplicates.slice(0, 10).map(d =>
+                  `| ${d.file} | ${d.startLine}-${d.endLine} | ${d.lines} lines |`
+                ).join('\n');
+
+                await createIssue(
+                  '📋 Code Duplication Detected',
+                  `## DRY Principle Violation\n\nFound **${duplCount}** duplicate code blocks.\n\n| File | Lines | Size |\n|------|-------|------|\n${list}\n${duplCount > 10 ? `\n*...and ${duplCount - 10} more blocks*` : ''}\n\n### Problems with Duplication\n- Bug fixes must be applied in multiple places\n- Inconsistencies creep in over time\n- Increases maintenance cost\n\n### How to Fix\n1. **Extract shared functions** - Move common code to utilities\n2. **Use generics** - For type-safe abstractions in Go 1.18+\n3. **Create interfaces** - Define contracts for common behavior\n4. **Use composition** - Embed common structs\n\nRun \`dupl -t 40 .\` locally to see all duplicates.\n\n---\n*Auto-generated by Quality Analysis*`,
+                  ['quality', 'refactoring', 'automated', 'code-smell']
+                );
+              }
+            } catch (e) {
+              console.log('Duplication analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 5. UNCHECKED ERRORS
+            // ============================================
+            try {
+              const errcheckReport = fs.readFileSync('errcheck-report.txt', 'utf8');
+              const errLines = errcheckReport.trim().split('\n').filter(l => l && !l.includes('main.go'));
+
+              if (errLines.length > 0) {
+                const errors = errLines.slice(0, 15).map(line => {
+                  const match = line.match(/^(.+):(\d+):(\d+):\s*(.+)$/);
+                  if (match) {
+                    return { file: match[1], line: match[2], col: match[3], detail: match[4] };
+                  }
+                  return { file: line, line: '?', col: '?', detail: '' };
+                });
+
+                const list = errors.map(e =>
+                  `| ${e.file}:${e.line} | \`${e.detail.substring(0, 50)}\` |`
+                ).join('\n');
+
+                await createIssue(
+                  '⚠️ Unchecked Errors',
+                  `## Error Handling Issues\n\nFound **${errLines.length}** unchecked errors.\n\n| Location | Code |\n|----------|------|\n${list}\n${errLines.length > 15 ? `\n*...and ${errLines.length - 15} more*` : ''}\n\n### Why This is Critical\n- Silent failures hide bugs\n- Data corruption can occur\n- Security vulnerabilities may be masked\n\n### How to Fix\n\`\`\`go\n// Bad\nfile.Close()\n\n// Good\nif err := file.Close(); err != nil {\n    log.Printf("failed to close file: %v", err)\n}\n\n// Or use defer with named return\ndefer func() {\n    if cerr := file.Close(); cerr != nil && err == nil {\n        err = cerr\n    }\n}()\n\`\`\`\n\n---\n*Auto-generated by Quality Analysis*`,
+                  ['quality', 'bug', 'automated', 'priority:high']
+                );
+              }
+            } catch (e) {
+              console.log('Errcheck analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 6. INEFFECTUAL ASSIGNMENTS
+            // ============================================
+            try {
+              const ineffReport = fs.readFileSync('ineffassign-report.txt', 'utf8');
+              const ineffLines = ineffReport.trim().split('\n').filter(l => l);
+
+              if (ineffLines.length > 0) {
+                const issues = ineffLines.slice(0, 15).map(line => {
+                  const match = line.match(/^(.+):(\d+):(\d+):\s*(.+)$/);
+                  if (match) {
+                    return { file: match[1], line: match[2], detail: match[4] };
+                  }
+                  return null;
+                }).filter(i => i);
+
+                if (issues.length > 0) {
+                  const list = issues.map(i =>
+                    `| ${i.file}:${i.line} | ${i.detail} |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '🔄 Ineffectual Assignments',
+                    `## Useless Variable Assignments\n\nFound **${ineffLines.length}** ineffectual assignments (values assigned but never used).\n\n| Location | Issue |\n|----------|-------|\n${list}\n\n### Common Patterns\n\`\`\`go\n// Bad - result never used\nresult := doSomething()\nresult = doSomethingElse() // previous value wasted\n\n// Bad - loop variable unused\nfor i := range items {\n    // i is never used, use _ instead\n}\n\n// Good\nfor _, item := range items {\n    process(item)\n}\n\`\`\`\n\n### How to Fix\n1. Remove unused assignments\n2. Use \`_\` for intentionally ignored values\n3. Check if the variable should actually be used\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['quality', 'code-smell', 'automated']
+                  );
+                }
+              }
+            } catch (e) {
+              console.log('Ineffassign analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 7. STATICCHECK ISSUES
+            // ============================================
+            try {
+              const staticReport = fs.readFileSync('staticcheck-report.json', 'utf8');
+              const lines = staticReport.trim().split('\n').filter(l => l);
+              const issues = [];
+
+              for (const line of lines) {
+                try {
+                  const issue = JSON.parse(line);
+                  if (issue.code && issue.message) {
+                    issues.push(issue);
+                  }
+                } catch (e) {}
+              }
+
+              // Group by category
+              const deprecated = issues.filter(i => i.code.startsWith('SA1'));
+              const simplify = issues.filter(i => i.code.startsWith('S1'));
+              const performance = issues.filter(i => i.code.startsWith('SA4') || i.code.startsWith('SA6'));
+
+              // Deprecated API usage
+              if (deprecated.length > 0) {
+                const list = deprecated.slice(0, 10).map(i =>
+                  `| \`${i.code}\` | ${i.location.file}:${i.location.line} | ${i.message.substring(0, 60)} |`
+                ).join('\n');
+
+                await createIssue(
+                  '📛 Deprecated API Usage',
+                  `## Using Deprecated Functions\n\nFound **${deprecated.length}** uses of deprecated APIs.\n\n| Code | Location | Message |\n|------|----------|--------|\n${list}\n\n### Why Fix This\n- Deprecated APIs may be removed in future versions\n- Security patches might not be applied\n- Better alternatives exist\n\n---\n*Auto-generated by Quality Analysis*`,
+                  ['quality', 'automated', 'tech-debt']
+                );
+              }
+
+              // Simplification opportunities
+              if (simplify.length > 5) {
+                const list = simplify.slice(0, 10).map(i =>
+                  `| \`${i.code}\` | ${i.location.file}:${i.location.line} | ${i.message.substring(0, 60)} |`
+                ).join('\n');
+
+                await createIssue(
+                  '✨ Code Simplification Opportunities',
+                  `## Code Can Be Simplified\n\nFound **${simplify.length}** opportunities to simplify code.\n\n| Code | Location | Suggestion |\n|------|----------|------------|\n${list}\n\n### Examples\n\`\`\`go\n// S1000: Use plain channel send/receive\nselect {\ncase x := <-ch:\n}\n// becomes\nx := <-ch\n\n// S1001: Replace loop with copy()\nfor i := range src {\n    dst[i] = src[i]\n}\n// becomes\ncopy(dst, src)\n\`\`\`\n\n---\n*Auto-generated by Quality Analysis*`,
+                  ['quality', 'refactoring', 'automated']
+                );
+              }
+            } catch (e) {
+              console.log('Staticcheck analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 8. LINT REPORT ANALYSIS
+            // ============================================
+            try {
+              const lintReport = JSON.parse(fs.readFileSync('lint-report.json', 'utf8'));
+
+              if (lintReport.Issues && lintReport.Issues.length > 0) {
+                // Group issues by linter
+                const byLinter = {};
+                for (const issue of lintReport.Issues) {
+                  const linter = issue.FromLinter || 'unknown';
+                  if (!byLinter[linter]) byLinter[linter] = [];
+                  byLinter[linter].push(issue);
+                }
+
+                // Shadow variables
+                const shadows = byLinter['govet'] ? byLinter['govet'].filter(i =>
+                  i.Text && i.Text.includes('shadow')
+                ) : [];
+
+                if (shadows.length > 0) {
+                  const list = shadows.slice(0, 10).map(i =>
+                    `| ${i.Pos.Filename}:${i.Pos.Line} | ${i.Text.substring(0, 70)} |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '👤 Variable Shadowing Issues',
+                    `## Shadow Variables Detected\n\nFound **${shadows.length}** shadowed variables.\n\n| Location | Issue |\n|----------|-------|\n${list}\n\n### What is Variable Shadowing?\nWhen an inner scope declares a variable with the same name as an outer scope:\n\n\`\`\`go\nerr := doFirst()\nif condition {\n    err := doSecond() // SHADOWS outer err!\n    // outer err is still nil here\n}\n// err might not contain the error from doSecond\n\`\`\`\n\n### How to Fix\n\`\`\`go\nerr := doFirst()\nif condition {\n    err = doSecond() // Use = not :=\n}\n\`\`\`\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['quality', 'bug', 'automated', 'priority:high']
+                  );
+                }
+
+                // Long functions
+                const longFuncs = byLinter['funlen'] || [];
+                if (longFuncs.length > 3) {
+                  const list = longFuncs.slice(0, 10).map(i =>
+                    `| ${i.Pos.Filename}:${i.Pos.Line} | ${i.Text} |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '📏 Functions Too Long',
+                    `## Long Functions Detected\n\nFound **${longFuncs.length}** functions exceeding recommended length.\n\n| Location | Issue |\n|----------|-------|\n${list}\n\n### Guidelines\n- Functions should ideally be < 60 lines\n- Each function should do ONE thing\n- If you need comments to explain sections, extract methods\n\n### Refactoring Tips\n1. Extract logical blocks into helper functions\n2. Use early returns to reduce nesting\n3. Move validation to separate functions\n4. Consider if the function has multiple responsibilities\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['quality', 'refactoring', 'automated', 'code-smell']
+                  );
+                }
+
+                // Magic numbers
+                const magicNums = byLinter['gomnd'] || byLinter['mnd'] || [];
+                if (magicNums.length > 5) {
+                  const list = magicNums.slice(0, 10).map(i =>
+                    `| ${i.Pos.Filename}:${i.Pos.Line} | ${i.Text.substring(0, 60)} |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '🔢 Magic Numbers in Code',
+                    `## Unexplained Numeric Literals\n\nFound **${magicNums.length}** magic numbers that should be named constants.\n\n| Location | Issue |\n|----------|-------|\n${list}\n\n### Why This Matters\n\`\`\`go\n// Bad - what does 86400 mean?\nif elapsed > 86400 {\n    expire()\n}\n\n// Good - intention is clear\nconst SecondsPerDay = 86400\nif elapsed > SecondsPerDay {\n    expire()\n}\n\`\`\`\n\n### Benefits of Named Constants\n- Self-documenting code\n- Single point of change\n- Prevents typos\n- Easier to find usages\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['quality', 'readability', 'automated']
+                  );
+                }
+              }
+            } catch (e) {
+              console.log('Lint analysis skipped:', e.message);
+            }
+
+            // ============================================
+            // 9. SECURITY ISSUES FROM GOSEC
+            // ============================================
+            try {
+              const secReport = JSON.parse(fs.readFileSync('gosec-report.json', 'utf8'));
+
+              if (secReport.Issues && secReport.Issues.length > 0) {
+                const high = secReport.Issues.filter(i => i.severity === 'HIGH');
+                const medium = secReport.Issues.filter(i => i.severity === 'MEDIUM');
+
+                if (high.length > 0) {
+                  const list = high.slice(0, 10).map(i =>
+                    `| \`${i.rule_id}\` | ${i.file}:${i.line} | ${i.details.substring(0, 50)} |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '🚨 Critical Security Vulnerabilities',
+                    `## HIGH Severity Security Issues\n\nFound **${high.length}** critical security vulnerabilities.\n\n| Rule | Location | Issue |\n|------|----------|-------|\n${list}\n\n### Required Actions\n1. **Fix immediately** - These are exploitable vulnerabilities\n2. Review for similar patterns in codebase\n3. Add security tests to prevent regression\n\n### Common Issues\n- G101: Hardcoded credentials\n- G102: Binding to all interfaces\n- G103: Unsafe package usage\n- G104: Unhandled errors\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['security', 'automated', 'priority:critical']
+                  );
+                }
+
+                if (medium.length > 3) {
+                  const list = medium.slice(0, 10).map(i =>
+                    `| \`${i.rule_id}\` | ${i.file}:${i.line} | ${i.details.substring(0, 50)} |`
+                  ).join('\n');
+
+                  await createIssue(
+                    '⚠️ Security Warnings',
+                    `## MEDIUM Severity Security Issues\n\nFound **${medium.length}** security warnings.\n\n| Rule | Location | Issue |\n|------|----------|-------|\n${list}\n\n### Suggested Actions\n- Review and fix in next sprint\n- Document if false positive\n- Consider security hardening\n\n---\n*Auto-generated by Quality Analysis*`,
+                    ['security', 'automated', 'priority:medium']
+                  );
+                }
+              }
+            } catch (e) {
+              console.log('Security analysis skipped:', e.message);
+            }
+
+            console.log('Quality issues creation completed');
