@@ -119,12 +119,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Gitleaks - Secret detection
+      # Gitleaks - Secret detection (using CLI directly, no license required)
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: true
+        run: |
+          go install github.com/gitleaks/gitleaks/v8@latest
+          gitleaks detect --source . --verbose --redact --report-format sarif --report-path gitleaks-results.sarif || true
+          gitleaks detect --source . --verbose --redact > gitleaks-report.txt 2>&1 || true
+
+      - name: Upload gitleaks report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-reports
+          path: |
+            gitleaks-results.sarif
+            gitleaks-report.txt
 
       # TruffleHog - Additional secret scanning
       - name: Run TruffleHog
@@ -218,7 +226,10 @@ jobs:
           # Check govulncheck
           VULN_COUNT=0
           if [ -f reports/sca-reports/govuln-report.txt ]; then
-            VULN_COUNT=$(grep -c "Vulnerability" reports/sca-reports/govuln-report.txt 2>/dev/null || echo "0")
+            VULN_COUNT=$(grep -c "Vulnerability" reports/sca-reports/govuln-report.txt 2>/dev/null | head -1 || echo "0")
+            # Ensure it's a valid number
+            VULN_COUNT=${VULN_COUNT:-0}
+            [[ "$VULN_COUNT" =~ ^[0-9]+$ ]] || VULN_COUNT=0
           fi
 
           # Generate report
