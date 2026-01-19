@@ -122,7 +122,7 @@ jobs:
       # Gitleaks - Secret detection (using CLI directly, no license required)
       - name: Run gitleaks
         run: |
-          go install github.com/gitleaks/gitleaks/v8@latest
+          go install github.com/zricethezav/gitleaks/v8@latest
           gitleaks detect --source . --verbose --redact --report-format sarif --report-path gitleaks-results.sarif || true
           gitleaks detect --source . --verbose --redact > gitleaks-report.txt 2>&1 || true
 
