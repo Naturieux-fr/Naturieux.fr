@@ -4,8 +4,8 @@
 
 ## P0 — Critique (conformité et fondations)
 
-- [ ] **Filtrage des licences photos/sons** : ajouter `photo_license=cc0,cc-by,cc-by-nc` (et `sound_license`) aux requêtes iNaturalist, exclure le contenu « tous droits réservés ». Voir [03 — Faisabilité](03-faisabilite.md) — c'est une obligation légale, pas une option.
-- [ ] **Attribution des médias** : stocker `license_code` + `attribution` de chaque photo et les afficher dans l'UI (auteur, licence, lien vers l'observation).
+- [x] **Filtrage des licences photos** : `photo_license=cc0,cc-by,cc-by-nc` sur les requêtes observations + filtre défensif côté client (photo par défaut du taxon exclue de l'affichage). Reste à faire pour les **sons** (`sound_license`) quand le SoundQuiz arrivera.
+- [x] **Attribution des médias** : `license_code` + `attribution` portés jusqu'à l'API (`media_attribution`, `media_license`) et affichés sous l'image du quiz. Amélioration possible : lien vers l'observation d'origine.
 - [ ] **Persistance SQLite** : implémenter `ports.QuizSessionRepository` et `ports.PlayerRepository` sur SQLite (`modernc.org/sqlite` pour rester sans CGO), retirer le store en mémoire du handler HTTP.
 - [ ] **Cache local des espèces** : pré-charger un pool de taxons/photos (métadonnées seulement, jamais les fichiers) rafraîchi périodiquement, au lieu d'appeler l'API à chaque partie. Respecter ≤ 60 req/min, back-off sur 429.
 
