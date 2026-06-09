@@ -310,13 +310,10 @@ func (c *Client) GetSimilar(ctx context.Context, speciesID int, limit int) ([]*s
 		return nil, err
 	}
 
-	ancestors := sp.AncestorIDs()
-	if len(ancestors) < 2 {
+	genusID := sp.GenusID()
+	if genusID == 0 {
 		return nil, fmt.Errorf("not enough ancestor data for species %d", speciesID)
 	}
-
-	// Use the genus (second to last ancestor typically)
-	genusID := ancestors[len(ancestors)-1]
 
 	params := url.Values{}
 	params.Set("taxon_id", strconv.Itoa(genusID))
@@ -388,16 +385,39 @@ func taxonToSpecies(t *taxon) *species.Species {
 	return sp
 }
 
-// photoToSpeciesPhoto converts an API photo to a domain Photo.
+// photoToSpeciesPhoto converts an API photo to a domain Photo. Observation
+// photos often expose only the square-sized URL; the other sizes follow the
+// same path with a different size segment and are derived when missing.
 func photoToSpeciesPhoto(p *photo) species.Photo {
+	medium := p.MediumURL
+	if medium == "" {
+		medium = sizedPhotoURL(p.URL, "medium")
+	}
+	large := p.LargeURL
+	if large == "" {
+		large = sizedPhotoURL(p.URL, "large")
+	}
+
 	return species.Photo{
 		ID:          p.ID,
 		URL:         p.URL,
-		MediumURL:   p.MediumURL,
-		LargeURL:    p.LargeURL,
+		MediumURL:   medium,
+		LargeURL:    large,
 		OriginalURL: p.OriginalURL,
 		SquareURL:   p.SquareURL,
 		Attribution: p.Attribution,
 		LicenseCode: p.LicenseCode,
 	}
+}
+
+// sizedPhotoURL rewrites an iNaturalist photo URL to another size variant
+// (square, small, medium, large, original). Returns the input unchanged
+// when the pattern is not recognized.
+func sizedPhotoURL(u, size string) string {
+	for _, known := range []string{"square", "small", "medium", "large", "original"} {
+		if strings.Contains(u, "/"+known+".") {
+			return strings.Replace(u, "/"+known+".", "/"+size+".", 1)
+		}
+	}
+	return u
 }

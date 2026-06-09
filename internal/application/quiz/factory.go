@@ -249,24 +249,28 @@ func (f *questionFactory) selectMedia(sp *species.Species, quizType quiz.QuizTyp
 
 	switch quizType {
 	case quiz.ImageQuiz:
-		if photo.LargeURL != "" {
-			return photo.LargeURL, &photo
-		}
-		return photo.MediumURL, &photo
+		return firstNonEmpty(photo.LargeURL, photo.MediumURL, photo.URL), &photo
 	case quiz.FlashQuiz:
 		// Use medium for faster loading
-		return photo.MediumURL, &photo
+		return firstNonEmpty(photo.MediumURL, photo.URL), &photo
 	case quiz.PartialQuiz, quiz.SilhouetteQuiz:
 		// Use original for processing
-		if photo.OriginalURL != "" {
-			return photo.OriginalURL, &photo
-		}
-		return photo.LargeURL, &photo
+		return firstNonEmpty(photo.OriginalURL, photo.LargeURL, photo.URL), &photo
 	case quiz.SoundQuiz:
 		// Sound quiz uses audio, not photos - return empty
 		return "", nil
 	}
 
 	// Default fallback (should not be reached with exhaustive switch)
-	return photo.MediumURL, &photo
+	return firstNonEmpty(photo.MediumURL, photo.URL), &photo
+}
+
+// firstNonEmpty returns the first non-empty string.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

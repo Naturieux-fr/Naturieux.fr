@@ -1,4 +1,3 @@
-// Package ports defines the interfaces between the application and adapters.
 package ports
 
 import "errors"

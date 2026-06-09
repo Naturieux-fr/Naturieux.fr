@@ -55,3 +55,25 @@ func TestFromSnapshot_Invalid(t *testing.T) {
 		t.Error("FromSnapshot() with invalid data should return an error")
 	}
 }
+
+func TestSpecies_GenusID(t *testing.T) {
+	cases := []struct {
+		name      string
+		ancestors []int
+		want      int
+	}{
+		{"self last (iNaturalist style)", []int{1, 5, 99, 42}, 99},
+		{"without self", []int{1, 5, 99}, 99},
+		{"only self", []int{42}, 0},
+		{"empty", nil, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sp, _ := species.New(42, "Testus testus", "", "Mammalia")
+			sp.SetAncestorIDs(tc.ancestors)
+			if got := sp.GenusID(); got != tc.want {
+				t.Errorf("GenusID() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

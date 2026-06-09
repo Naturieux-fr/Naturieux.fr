@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/cache"
 	httphandler "github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/mock"
@@ -21,6 +22,9 @@ import (
 
 const (
 	defaultPort = "8080"
+	// francePlaceID is the iNaturalist place ID used to focus the quiz
+	// on species observable in France.
+	francePlaceID = 6753
 )
 
 func main() {
@@ -31,16 +35,6 @@ func main() {
 
 	// Check for dev mode
 	devMode := os.Getenv("DEV_MODE") == "true" || os.Getenv("DEV_MODE") == "1"
-
-	// Initialize species repository based on mode
-	var speciesRepo ports.SpeciesRepository
-	if devMode {
-		log.Println("🔧 DEV MODE ENABLED - Using mock data")
-		speciesRepo = mock.NewSpeciesRepository()
-	} else {
-		log.Println("🌿 Production mode - Using iNaturalist API")
-		speciesRepo = inaturalist.NewClient()
-	}
 
 	// Open SQLite database for persistence
 	dbPath := os.Getenv("DB_PATH")
@@ -54,6 +48,27 @@ func main() {
 	defer func() { _ = db.Close() }()
 	log.Printf("Database: %s", dbPath)
 
+	// Background tasks stop when the server shuts down
+	backgroundCtx, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+
+	// Initialize species repository based on mode
+	var speciesRepo ports.SpeciesRepository
+	if devMode {
+		log.Println("🔧 DEV MODE ENABLED - Using mock data")
+		speciesRepo = mock.NewSpeciesRepository()
+	} else {
+		log.Println("🌿 Production mode - Using iNaturalist API with local cache")
+		speciesCache, err := cache.New(db, inaturalist.NewClient(),
+			cache.WithPlaceID(francePlaceID))
+		if err != nil {
+			log.Fatalf("Failed to initialize species cache: %v", err)
+		}
+		go speciesCache.StartAutoWarm(backgroundCtx, cache.DefaultWarmInterval,
+			cache.WarmTaxa, cache.DefaultWarmTarget)
+		speciesRepo = speciesCache
+	}
+
 	playerRepo := sqlite.NewPlayerRepository(db)
 	sessionRepo := sqlite.NewSessionRepository(db)
 
@@ -65,8 +80,8 @@ func main() {
 	// Create question factory
 	questionFactory := appquiz.NewQuestionFactory(
 		speciesRepo,
-		appquiz.WithTaxonFilter(""),   // All taxa
-		appquiz.WithPlaceFilter(6753), // France
+		appquiz.WithTaxonFilter(""),            // All taxa
+		appquiz.WithPlaceFilter(francePlaceID), // France
 	)
 
 	// Create quiz service

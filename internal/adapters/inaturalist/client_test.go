@@ -489,6 +489,49 @@ func TestClient_GetRandom_NilTaxon(t *testing.T) {
 	}
 }
 
+func TestClient_GetRandom_DerivesPhotoSizes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"total_results": 1,
+			"results": []map[string]interface{}{
+				{
+					"id": 1,
+					"taxon": map[string]interface{}{
+						"id":   100,
+						"name": "Square Only Species",
+					},
+					"photos": []map[string]interface{}{
+						// Observation photos often expose only the square URL
+						{"id": 1, "url": "https://example.com/photos/123/square.jpg", "license_code": "cc-by"},
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := inaturalist.NewClient(
+		inaturalist.WithBaseURL(server.URL),
+	)
+
+	species, err := client.GetRandom(context.Background(), ports.SpeciesFilter{})
+	if err != nil {
+		t.Fatalf("GetRandom() error = %v", err)
+	}
+	if len(species) != 1 {
+		t.Fatalf("GetRandom() returned %d species, want 1", len(species))
+	}
+
+	photo := species[0].Photos()[0]
+	if photo.MediumURL != "https://example.com/photos/123/medium.jpg" {
+		t.Errorf("MediumURL = %s, want derived medium URL", photo.MediumURL)
+	}
+	if photo.LargeURL != "https://example.com/photos/123/large.jpg" {
+		t.Errorf("LargeURL = %s, want derived large URL", photo.LargeURL)
+	}
+}
+
 func TestClient_GetRandom_FiltersUnlicensedPhotos(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{

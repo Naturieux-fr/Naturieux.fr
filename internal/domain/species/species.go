@@ -118,6 +118,20 @@ func (s *Species) AncestorIDs() []int {
 	return s.ancestorIDs
 }
 
+// GenusID returns the immediate parent taxon ID (usually the genus).
+// iNaturalist ancestor lists may include the taxon itself as the last
+// element; it is skipped. Returns 0 when no parent is known.
+func (s *Species) GenusID() int {
+	ancestors := s.ancestorIDs
+	if len(ancestors) > 0 && ancestors[len(ancestors)-1] == s.id {
+		ancestors = ancestors[:len(ancestors)-1]
+	}
+	if len(ancestors) == 0 {
+		return 0
+	}
+	return ancestors[len(ancestors)-1]
+}
+
 // SetRank sets the taxonomic rank.
 func (s *Species) SetRank(rank string) {
 	s.rank = rank
