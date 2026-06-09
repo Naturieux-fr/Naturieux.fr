@@ -319,6 +319,14 @@ func (s *Service) GetSession(ctx context.Context, id string) (*quiz.Session, err
 	return s.sessionRepo.GetByID(ctx, id)
 }
 
+// GetLeaderboard returns the top players ranked by XP.
+func (s *Service) GetLeaderboard(ctx context.Context, limit int) ([]*gamification.Player, error) {
+	if s.playerRepo == nil {
+		return nil, errors.New("player repository not configured")
+	}
+	return s.playerRepo.GetLeaderboard(ctx, limit)
+}
+
 // AbandonSession marks a session as abandoned.
 func (s *Service) AbandonSession(ctx context.Context, session *quiz.Session) error {
 	if session == nil {

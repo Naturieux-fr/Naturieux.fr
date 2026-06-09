@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Naturieux - Quiz Naturaliste</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -95,6 +95,10 @@
                         <span x-show="!loading">Commencer</span>
                         <span x-show="loading" class="loader-small"></span>
                         <span class="btn-icon">→</span>
+                    </button>
+
+                    <button @click="showLeaderboard()" class="secondary-btn leaderboard-btn">
+                        🏆 Classement
                     </button>
                 </div>
             </div>
@@ -224,6 +228,42 @@
             </div>
         </section>
 
+        <!-- Leaderboard Screen -->
+        <section x-show="screen === 'leaderboard'" x-transition class="screen">
+            <div class="leaderboard-container">
+                <header class="leaderboard-header">
+                    <h2>🏆 Classement</h2>
+                    <p class="leaderboard-subtitle">Les meilleurs naturalistes</p>
+                </header>
+
+                <div class="leaderboard-list" x-show="leaderboard.length > 0">
+                    <template x-for="entry in leaderboard" :key="entry.rank">
+                        <div class="leaderboard-entry" :class="{ 'top-three': entry.rank <= 3 }">
+                            <span class="entry-rank"
+                                  x-text="entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : entry.rank">
+                            </span>
+                            <div class="entry-player">
+                                <span class="entry-name" x-text="entry.username"></span>
+                                <span class="entry-level" x-text="`Niveau ${entry.level}`"></span>
+                            </div>
+                            <div class="entry-stats">
+                                <span class="entry-xp" x-text="`${entry.total_xp} XP`"></span>
+                                <span class="entry-detail"
+                                      x-text="`${entry.total_games} parties • ${Math.round(entry.accuracy)}%`">
+                                </span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <p class="leaderboard-empty" x-show="leaderboard.length === 0">
+                    Aucun joueur classe pour le moment. Lancez une partie !
+                </p>
+
+                <button @click="goHome()" class="secondary-btn">← Retour</button>
+            </div>
+        </section>
+
         <!-- Loading Overlay -->
         <div class="loading-overlay" x-show="loading" x-transition.opacity>
             <div class="loader">
@@ -239,6 +279,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=1.1"></script>
+    <script src="/static/js/app.js?v=1.2"></script>
 </body>
 </html>

@@ -3,9 +3,12 @@
 function quizApp() {
     return {
         // Screens
-        screen: 'home', // 'home', 'quiz', 'results'
+        screen: 'home', // 'home', 'quiz', 'results', 'leaderboard'
         loading: false,
         error: '',
+
+        // Leaderboard
+        leaderboard: [],
 
         // Dev mode
         devMode: false,
@@ -351,6 +354,21 @@ function quizApp() {
         goHome() {
             this.stopTimer();
             this.screen = 'home';
+        },
+
+        // Show the leaderboard screen
+        async showLeaderboard() {
+            this.loading = true;
+            try {
+                const data = await this.api('/leaderboard?limit=10', 'GET');
+                this.leaderboard = data.entries || [];
+                this.screen = 'leaderboard';
+            } catch (e) {
+                this.error = 'Impossible de charger le classement';
+                console.error('Leaderboard error:', e);
+            } finally {
+                this.loading = false;
+            }
         },
 
         // Quit current game

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
@@ -292,6 +293,62 @@ func questionToDTO(q *quiz.Question) QuestionDTO {
 	return dto
 }
 
+// LeaderboardEntryDTO represents one ranked player for API responses.
+type LeaderboardEntryDTO struct {
+	Rank       int     `json:"rank"`
+	Username   string  `json:"username"`
+	Level      int     `json:"level"`
+	TotalXP    int     `json:"total_xp"`
+	TotalGames int     `json:"total_games"`
+	Accuracy   float64 `json:"accuracy"`
+	BestStreak int     `json:"best_streak"`
+}
+
+// Leaderboard size limits.
+const (
+	defaultLeaderboardLimit = 10
+	maxLeaderboardLimit     = 100
+)
+
+// HandleLeaderboard handles GET /api/v1/leaderboard
+func (h *Handler) HandleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	limit := defaultLeaderboardLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			writeError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		limit = min(parsed, maxLeaderboardLimit)
+	}
+
+	players, err := h.quizService.GetLeaderboard(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	entries := make([]LeaderboardEntryDTO, len(players))
+	for i, p := range players {
+		entries[i] = LeaderboardEntryDTO{
+			Rank:       i + 1,
+			Username:   p.Username(),
+			Level:      p.Level(),
+			TotalXP:    p.TotalXP(),
+			TotalGames: p.TotalGames(),
+			Accuracy:   p.Accuracy(),
+			BestStreak: p.BestStreak(),
+		}
+	}
+
+	writeSuccess(w, map[string]interface{}{"entries": entries})
+}
+
 // HandleConfig handles GET /api/v1/config
 func (h *Handler) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -309,6 +366,7 @@ func (h *Handler) HandleConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.HandleHealthCheck)
 	mux.HandleFunc("/api/v1/config", h.HandleConfig)
+	mux.HandleFunc("/api/v1/leaderboard", h.HandleLeaderboard)
 	mux.HandleFunc("/api/v1/quiz/start", h.HandleStartSession)
 	mux.HandleFunc("/api/v1/quiz/answer", h.HandleSubmitAnswer)
 	mux.HandleFunc("/api/v1/quiz/abandon", h.HandleAbandonSession)
