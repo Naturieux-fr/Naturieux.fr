@@ -6,7 +6,7 @@
 
 - [x] **Filtrage des licences photos** : `photo_license=cc0,cc-by,cc-by-nc` sur les requêtes observations + filtre défensif côté client (photo par défaut du taxon exclue de l'affichage). Reste à faire pour les **sons** (`sound_license`) quand le SoundQuiz arrivera.
 - [x] **Attribution des médias** : `license_code` + `attribution` portés jusqu'à l'API (`media_attribution`, `media_license`) et affichés sous l'image du quiz. Amélioration possible : lien vers l'observation d'origine.
-- [ ] **Persistance SQLite** : implémenter `ports.QuizSessionRepository` et `ports.PlayerRepository` sur SQLite (`modernc.org/sqlite` pour rester sans CGO), retirer le store en mémoire du handler HTTP.
+- [x] **Persistance SQLite** : `internal/adapters/sqlite` (driver pur Go `modernc.org/sqlite`), sessions stockées en snapshot JSON + colonnes dénormalisées pour les stats, joueurs persistés (XP, niveaux, achievements). Le store en mémoire du handler est supprimé : les parties survivent à un redémarrage du serveur. Variable `DB_PATH` (défaut `naturieux.db`).
 - [ ] **Cache local des espèces** : pré-charger un pool de taxons/photos (métadonnées seulement, jamais les fichiers) rafraîchi périodiquement, au lieu d'appeler l'API à chaque partie. Respecter ≤ 60 req/min, back-off sur 429.
 
 ## P1 — Important (expérience de jeu)
@@ -39,7 +39,7 @@
 
 ## Dette technique
 
-- [ ] Déplacer le store de sessions hors du handler HTTP (vers le service + repository).
-- [ ] `cmd/server` : extraire `newInMemoryPlayerRepository` dans `internal/adapters/memory`.
+- [x] Store de sessions déplacé hors du handler HTTP (service + repository SQLite).
+- [x] Repo joueurs en mémoire de `cmd/server` supprimé (remplacé par SQLite).
 - [ ] Couverture handlers HTTP < 60 % : tester les chemins succès avec un service mocké (injecter une interface au lieu de `*appquiz.Service`).
 - [ ] Harmoniser fins de ligne (warnings LF/CRLF sous Windows) via `.gitattributes`.
