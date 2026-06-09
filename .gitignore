@@ -45,7 +45,3 @@ tmp/
 # Logs
 *.log
 logs/
-
-# Local tooling caches
-.claude/
-.serena/
