@@ -65,6 +65,7 @@ type StartSessionResponse struct {
 	SessionID      string
 	FirstQuestion  *quiz.Question
 	TotalQuestions int
+	Session        *quiz.Session // Added to allow handler to store session
 }
 
 // normalizeRequest applies default values to the request.
@@ -109,6 +110,7 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 		SessionID:      session.ID(),
 		FirstQuestion:  session.CurrentQuestion(),
 		TotalQuestions: len(questions),
+		Session:        session,
 	}, nil
 }
 

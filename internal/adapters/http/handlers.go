@@ -14,13 +14,15 @@ import (
 type Handler struct {
 	quizService *appquiz.Service
 	sessions    map[string]*quiz.Session // In-memory session store (use proper storage in production)
+	devMode     bool
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(quizService *appquiz.Service) *Handler {
+func NewHandler(quizService *appquiz.Service, devMode bool) *Handler {
 	return &Handler{
 		quizService: quizService,
 		sessions:    make(map[string]*quiz.Session),
+		devMode:     devMode,
 	}
 }
 
@@ -145,8 +147,9 @@ func (h *Handler) HandleStartSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store session (in production, use proper storage)
-	// Note: This is simplified for the example
+	// Store session in memory for later use
+	h.sessions[result.SessionID] = result.Session
+
 	response := StartSessionResponse{
 		SessionID:      result.SessionID,
 		TotalQuestions: result.TotalQuestions,
@@ -281,9 +284,23 @@ func questionToDTO(q *quiz.Question) QuestionDTO {
 	return dto
 }
 
+// HandleConfig handles GET /api/v1/config
+func (h *Handler) HandleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	writeSuccess(w, map[string]interface{}{
+		"dev_mode": h.devMode,
+		"version":  "1.0.0",
+	})
+}
+
 // RegisterRoutes registers all routes with the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.HandleHealthCheck)
+	mux.HandleFunc("/api/v1/config", h.HandleConfig)
 	mux.HandleFunc("/api/v1/quiz/start", h.HandleStartSession)
 	mux.HandleFunc("/api/v1/quiz/answer", h.HandleSubmitAnswer)
 	mux.HandleFunc("/api/v1/quiz/abandon", h.HandleAbandonSession)

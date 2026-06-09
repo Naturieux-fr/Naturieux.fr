@@ -13,6 +13,7 @@ import (
 
 	httphandler "github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/mock"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
@@ -28,8 +29,18 @@ func main() {
 		port = defaultPort
 	}
 
-	// Initialize dependencies
-	inatClient := inaturalist.NewClient()
+	// Check for dev mode
+	devMode := os.Getenv("DEV_MODE") == "true" || os.Getenv("DEV_MODE") == "1"
+
+	// Initialize species repository based on mode
+	var speciesRepo ports.SpeciesRepository
+	if devMode {
+		log.Println("🔧 DEV MODE ENABLED - Using mock data")
+		speciesRepo = mock.NewSpeciesRepository()
+	} else {
+		log.Println("🌿 Production mode - Using iNaturalist API")
+		speciesRepo = inaturalist.NewClient()
+	}
 
 	// In-memory player repository (use proper database in production)
 	playerRepo := newInMemoryPlayerRepository()
@@ -45,7 +56,7 @@ func main() {
 
 	// Create question factory
 	questionFactory := appquiz.NewQuestionFactory(
-		inatClient,
+		speciesRepo,
 		appquiz.WithTaxonFilter(""),   // All taxa
 		appquiz.WithPlaceFilter(6753), // France
 	)
@@ -59,11 +70,24 @@ func main() {
 	)
 
 	// Create HTTP handler
-	handler := httphandler.NewHandler(quizService)
+	handler := httphandler.NewHandler(quizService, devMode)
 
 	// Create HTTP server
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
+
+	// Serve static files
+	staticFS := http.FileServer(http.Dir("web/static"))
+	mux.Handle("/static/", http.StripPrefix("/static/", staticFS))
+
+	// Serve index.html for root
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, "web/index.html")
+	})
 
 	// Add CORS middleware for development
 	corsHandler := corsMiddleware(mux)
@@ -71,14 +95,15 @@ func main() {
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      corsHandler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 120 * time.Second, // Increased for iNaturalist API calls
 		IdleTimeout:  60 * time.Second,
 	}
 
 	// Start server in goroutine
 	go func() {
 		log.Printf("Starting Naturieux server on port %s", port)
+		log.Printf("Frontend: http://localhost:%s/", port)
 		log.Printf("Health check: http://localhost:%s/health", port)
 		log.Printf("API: http://localhost:%s/api/v1/", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -61,7 +61,7 @@ func NewClient(opts ...ClientOption) *Client {
 			Timeout: defaultTimeout,
 		},
 		userAgent:   defaultUserAgent,
-		rateLimiter: newRateLimiter(time.Second),
+		rateLimiter: newRateLimiter(time.Second), // iNaturalist recommends staying under 60 req/min
 	}
 
 	for _, opt := range opts {

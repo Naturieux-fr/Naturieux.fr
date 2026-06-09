@@ -11,7 +11,7 @@ import (
 )
 
 func TestHandler_HandleHealthCheck(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -33,7 +33,7 @@ func TestHandler_HandleHealthCheck(t *testing.T) {
 }
 
 func TestHandler_HandleHealthCheck_WrongMethod(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	req := httptest.NewRequest(http.MethodPost, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -46,7 +46,7 @@ func TestHandler_HandleHealthCheck_WrongMethod(t *testing.T) {
 }
 
 func TestHandler_HandleStartSession_WrongMethod(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/quiz/start", nil)
 	rec := httptest.NewRecorder()
@@ -59,7 +59,7 @@ func TestHandler_HandleStartSession_WrongMethod(t *testing.T) {
 }
 
 func TestHandler_HandleStartSession_InvalidJSON(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	body := bytes.NewBufferString("invalid json")
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/quiz/start", body)
@@ -73,7 +73,7 @@ func TestHandler_HandleStartSession_InvalidJSON(t *testing.T) {
 }
 
 func TestHandler_HandleStartSession_MissingUserID(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	reqBody := httphandler.StartSessionRequest{
 		Difficulty:    "beginner",
@@ -91,7 +91,7 @@ func TestHandler_HandleStartSession_MissingUserID(t *testing.T) {
 }
 
 func TestHandler_HandleSubmitAnswer_WrongMethod(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/quiz/answer", nil)
 	rec := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestHandler_HandleSubmitAnswer_WrongMethod(t *testing.T) {
 }
 
 func TestHandler_HandleSubmitAnswer_SessionNotFound(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	reqBody := httphandler.SubmitAnswerRequest{
 		SessionID:   "nonexistent",
@@ -123,7 +123,7 @@ func TestHandler_HandleSubmitAnswer_SessionNotFound(t *testing.T) {
 }
 
 func TestHandler_HandleAbandonSession_WrongMethod(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/quiz/abandon", nil)
 	rec := httptest.NewRecorder()
@@ -136,7 +136,7 @@ func TestHandler_HandleAbandonSession_WrongMethod(t *testing.T) {
 }
 
 func TestHandler_HandleAbandonSession_SessionNotFound(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	reqBody := map[string]string{"session_id": "nonexistent"}
 	body, _ := json.Marshal(reqBody)
@@ -151,7 +151,7 @@ func TestHandler_HandleAbandonSession_SessionNotFound(t *testing.T) {
 }
 
 func TestHandler_RegisterRoutes(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 	mux := http.NewServeMux()
 
 	handler.RegisterRoutes(mux)
@@ -168,7 +168,7 @@ func TestHandler_RegisterRoutes(t *testing.T) {
 }
 
 func TestHandler_HandleSubmitAnswer_MissingSessionID(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	reqBody := httphandler.SubmitAnswerRequest{
 		SpeciesID:   1,
@@ -186,7 +186,7 @@ func TestHandler_HandleSubmitAnswer_MissingSessionID(t *testing.T) {
 }
 
 func TestHandler_HandleAbandonSession_InvalidJSON(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	body := bytes.NewBufferString("invalid json")
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/quiz/abandon", body)
@@ -200,7 +200,7 @@ func TestHandler_HandleAbandonSession_InvalidJSON(t *testing.T) {
 }
 
 func TestHandler_HandleSubmitAnswer_InvalidJSON(t *testing.T) {
-	handler := httphandler.NewHandler(nil)
+	handler := httphandler.NewHandler(nil, false)
 
 	body := bytes.NewBufferString("invalid json")
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/quiz/answer", body)
