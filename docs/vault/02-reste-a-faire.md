@@ -12,7 +12,7 @@
 ## P1 — Important (expérience de jeu)
 
 - [ ] **Comptes utilisateurs simples** : pseudo + identifiant local (pas d'OAuth dans un premier temps), remplacement du joueur « demo ».
-- [ ] **Leaderboard** : classement global et par taxon, endpoint `GET /api/v1/leaderboard`.
+- [x] **Leaderboard** : endpoint `GET /api/v1/leaderboard` (classement par XP, paramètre `limit`) + écran frontend (médailles top 3, niveau, parties, précision). Évolution possible : classement par taxon ou par période.
 - [ ] **Quiz types restants côté frontend** :
   - Flash : déjà côté API (durée d'affichage), finaliser l'UI.
   - Partial : recadrage CSS (zoom sur une zone de la photo).
