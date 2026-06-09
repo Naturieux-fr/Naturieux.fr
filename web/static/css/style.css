@@ -486,6 +486,14 @@ img {
     opacity: 1;
 }
 
+.photo-credit {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    text-align: right;
+    margin: -14px 4px 14px;
+    opacity: 0.8;
+}
+
 .image-loader {
     position: absolute;
     top: 50%;

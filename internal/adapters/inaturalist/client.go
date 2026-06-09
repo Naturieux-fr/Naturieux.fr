@@ -123,6 +123,7 @@ type photo struct {
 	OriginalURL string `json:"original_url"`
 	SquareURL   string `json:"square_url"`
 	Attribution string `json:"attribution"`
+	LicenseCode string `json:"license_code"`
 }
 
 type taxaResponse struct {
@@ -207,10 +208,16 @@ func (c *Client) GetRandom(ctx context.Context, filter ports.SpeciesFilter) ([]*
 	return c.deduplicateObservations(result.Results), nil
 }
 
+// allowedPhotoLicenses restricts results to Creative Commons photos that a
+// free, non-commercial app may display with attribution. "All rights
+// reserved" media must never be served.
+const allowedPhotoLicenses = "cc0,cc-by,cc-by-nc"
+
 // buildObservationParams creates URL parameters for observation queries.
 func (c *Client) buildObservationParams(filter ports.SpeciesFilter) url.Values {
 	params := url.Values{}
 	params.Set("photos", "true")
+	params.Set("photo_license", allowedPhotoLicenses)
 	params.Set("quality_grade", "research")
 	params.Set("identified", "true")
 	params.Set("order_by", "random")
@@ -249,7 +256,8 @@ func (c *Client) formatIDList(ids []int) string {
 	return strings.Join(strs, ",")
 }
 
-// deduplicateObservations extracts unique species from observations.
+// deduplicateObservations extracts unique species from observations,
+// skipping observations without any displayable (CC-licensed) photo.
 func (c *Client) deduplicateObservations(observations []observation) []*species.Species {
 	seen := make(map[int]bool)
 	speciesList := make([]*species.Species, 0, len(observations))
@@ -258,20 +266,40 @@ func (c *Client) deduplicateObservations(observations []observation) []*species.
 		if obs.Taxon == nil || seen[obs.Taxon.ID] {
 			continue
 		}
+		sp := c.observationToSpecies(obs)
+		if !sp.HasPhotos() {
+			continue
+		}
 		seen[obs.Taxon.ID] = true
-		speciesList = append(speciesList, c.observationToSpecies(obs))
+		speciesList = append(speciesList, sp)
 	}
 
 	return speciesList
 }
 
-// observationToSpecies converts an observation to a species with photos.
+// observationToSpecies converts an observation to a species. Only the
+// observation's CC-licensed photos are attached: the taxon default photo is
+// not covered by the photo_license query filter and must not be displayed.
 func (c *Client) observationToSpecies(obs observation) *species.Species {
-	sp := taxonToSpecies(obs.Taxon)
+	sp, _ := species.New(obs.Taxon.ID, obs.Taxon.Name, obs.Taxon.PreferredCommonName, obs.Taxon.IconicTaxonName)
+	sp.SetAncestorIDs(obs.Taxon.AncestorIDs)
+	sp.SetRank(obs.Taxon.Rank)
 	for _, p := range obs.Photos {
-		sp.AddPhoto(photoToSpeciesPhoto(&p))
+		if isAllowedLicense(p.LicenseCode) {
+			sp.AddPhoto(photoToSpeciesPhoto(&p))
+		}
 	}
 	return sp
+}
+
+// isAllowedLicense reports whether a photo license permits display in a
+// free, non-commercial app with attribution.
+func isAllowedLicense(code string) bool {
+	switch strings.ToLower(code) {
+	case "cc0", "cc-by", "cc-by-nc":
+		return true
+	}
+	return false
 }
 
 // GetSimilar retrieves species in the same genus or family.
@@ -370,5 +398,6 @@ func photoToSpeciesPhoto(p *photo) species.Photo {
 		OriginalURL: p.OriginalURL,
 		SquareURL:   p.SquareURL,
 		Attribution: p.Attribution,
+		LicenseCode: p.LicenseCode,
 	}
 }

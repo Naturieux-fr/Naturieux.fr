@@ -33,6 +33,7 @@ type Photo struct {
 	OriginalURL string
 	SquareURL   string
 	Attribution string
+	LicenseCode string
 }
 
 // Species represents a biological species entity.

@@ -15,15 +15,17 @@ type Choice struct {
 
 // Question represents a single quiz question.
 type Question struct {
-	id             string
-	quizType       QuizType
-	difficulty     Difficulty
-	correctSpecies *species.Species
-	choices        []Choice
-	mediaURL       string
-	timeLimit      time.Duration
-	flashDuration  time.Duration
-	createdAt      time.Time
+	id               string
+	quizType         QuizType
+	difficulty       Difficulty
+	correctSpecies   *species.Species
+	choices          []Choice
+	mediaURL         string
+	mediaAttribution string
+	mediaLicense     string
+	timeLimit        time.Duration
+	flashDuration    time.Duration
+	createdAt        time.Time
 }
 
 // NewQuestion creates a new Question with validation.
@@ -109,6 +111,22 @@ func (q *Question) Choices() []Choice {
 // MediaURL returns the media URL for the question.
 func (q *Question) MediaURL() string {
 	return q.mediaURL
+}
+
+// SetMediaCredit records the author attribution and license of the media.
+func (q *Question) SetMediaCredit(attribution, licenseCode string) {
+	q.mediaAttribution = attribution
+	q.mediaLicense = licenseCode
+}
+
+// MediaAttribution returns the author attribution of the media.
+func (q *Question) MediaAttribution() string {
+	return q.mediaAttribution
+}
+
+// MediaLicense returns the license code of the media (e.g. "cc-by-nc").
+func (q *Question) MediaLicense() string {
+	return q.mediaLicense
 }
 
 // TimeLimit returns the time limit for answering.

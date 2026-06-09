@@ -108,10 +108,10 @@ func (f *questionFactory) CreateQuestion(
 		choices[i], choices[j] = choices[j], choices[i]
 	})
 
-	// Get media URL
-	mediaURL := f.selectMediaURL(correct, quizType)
+	// Get media URL and its credit
+	mediaURL, mediaPhoto := f.selectMedia(correct, quizType)
 
-	return quiz.NewQuestion(
+	question, err := quiz.NewQuestion(
 		uuid.New().String(),
 		quizType,
 		difficulty,
@@ -119,6 +119,15 @@ func (f *questionFactory) CreateQuestion(
 		choices,
 		mediaURL,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	if mediaPhoto != nil {
+		question.SetMediaCredit(mediaPhoto.Attribution, mediaPhoto.LicenseCode)
+	}
+
+	return question, nil
 }
 
 // Minimum number of choices required for a valid question.
@@ -141,6 +150,14 @@ func (f *questionFactory) getWrongChoices(
 	}
 
 	result := f.combineUniqueSpecies(correct.ID(), similar, random, count)
+	if len(result) < count {
+		// Not enough species in the same taxon: top up with any taxon so
+		// small groups can still produce a full set of choices.
+		anyTaxon, anyErr := f.fetchRandomAnyTaxon(ctx, correct, count)
+		if anyErr == nil {
+			result = f.combineUniqueSpecies(correct.ID(), result, anyTaxon, count)
+		}
+	}
 	if len(result) < minChoicesRequired {
 		return nil, errors.New("not enough species for choices")
 	}
@@ -168,6 +185,20 @@ func (f *questionFactory) fetchRandomSpecies(
 		Limit:       count + 5,
 		HasPhotos:   true,
 		ExcludeIDs:  []int{correct.ID()},
+	}
+	return f.speciesRepo.GetRandom(ctx, filter)
+}
+
+// fetchRandomAnyTaxon retrieves random species regardless of taxon.
+func (f *questionFactory) fetchRandomAnyTaxon(
+	ctx context.Context,
+	correct *species.Species,
+	count int,
+) ([]*species.Species, error) {
+	filter := ports.SpeciesFilter{
+		Limit:      count + 5,
+		HasPhotos:  true,
+		ExcludeIDs: []int{correct.ID()},
 	}
 	return f.speciesRepo.GetRandom(ctx, filter)
 }
@@ -205,11 +236,13 @@ func collectUniqueSpecies(
 	return result
 }
 
-// selectMediaURL selects the appropriate media URL based on quiz type.
-func (f *questionFactory) selectMediaURL(sp *species.Species, quizType quiz.QuizType) string {
+// selectMedia selects the appropriate media URL and source photo based on
+// quiz type. The photo carries the attribution and license that must be
+// displayed alongside the media.
+func (f *questionFactory) selectMedia(sp *species.Species, quizType quiz.QuizType) (string, *species.Photo) {
 	photos := sp.Photos()
 	if len(photos) == 0 {
-		return ""
+		return "", nil
 	}
 
 	photo := photos[0]
@@ -217,23 +250,23 @@ func (f *questionFactory) selectMediaURL(sp *species.Species, quizType quiz.Quiz
 	switch quizType {
 	case quiz.ImageQuiz:
 		if photo.LargeURL != "" {
-			return photo.LargeURL
+			return photo.LargeURL, &photo
 		}
-		return photo.MediumURL
+		return photo.MediumURL, &photo
 	case quiz.FlashQuiz:
 		// Use medium for faster loading
-		return photo.MediumURL
+		return photo.MediumURL, &photo
 	case quiz.PartialQuiz, quiz.SilhouetteQuiz:
 		// Use original for processing
 		if photo.OriginalURL != "" {
-			return photo.OriginalURL
+			return photo.OriginalURL, &photo
 		}
-		return photo.LargeURL
+		return photo.LargeURL, &photo
 	case quiz.SoundQuiz:
 		// Sound quiz uses audio, not photos - return empty
-		return ""
+		return "", nil
 	}
 
 	// Default fallback (should not be reached with exhaustive switch)
-	return photo.MediumURL
+	return photo.MediumURL, &photo
 }

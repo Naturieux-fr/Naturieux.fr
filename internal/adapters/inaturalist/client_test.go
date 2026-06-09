@@ -114,6 +114,9 @@ func TestClient_GetRandom(t *testing.T) {
 		if query.Get("order_by") != "random" {
 			t.Error("Expected order_by=random")
 		}
+		if query.Get("photo_license") != "cc0,cc-by,cc-by-nc" {
+			t.Errorf("Expected photo_license=cc0,cc-by,cc-by-nc, got %s", query.Get("photo_license"))
+		}
 
 		response := map[string]interface{}{
 			"total_results": 2,
@@ -127,7 +130,7 @@ func TestClient_GetRandom(t *testing.T) {
 						"iconic_taxon_name":     "Mammalia",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 1, "medium_url": "https://example.com/1.jpg"},
+						{"id": 1, "medium_url": "https://example.com/1.jpg", "license_code": "cc-by-nc"},
 					},
 				},
 				{
@@ -139,7 +142,7 @@ func TestClient_GetRandom(t *testing.T) {
 						"iconic_taxon_name":     "Aves",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 2, "medium_url": "https://example.com/2.jpg"},
+						{"id": 2, "medium_url": "https://example.com/2.jpg", "license_code": "cc-by"},
 					},
 				},
 			},
@@ -187,7 +190,7 @@ func TestClient_GetRandom_Deduplication(t *testing.T) {
 						"name": "Species 1",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 1, "medium_url": "https://example.com/1.jpg"},
+						{"id": 1, "medium_url": "https://example.com/1.jpg", "license_code": "cc-by-nc"},
 					},
 				},
 				{
@@ -197,7 +200,7 @@ func TestClient_GetRandom_Deduplication(t *testing.T) {
 						"name": "Species 1",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 2, "medium_url": "https://example.com/2.jpg"},
+						{"id": 2, "medium_url": "https://example.com/2.jpg", "license_code": "cc-by"},
 					},
 				},
 				{
@@ -207,7 +210,7 @@ func TestClient_GetRandom_Deduplication(t *testing.T) {
 						"name": "Species 2",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 3, "medium_url": "https://example.com/3.jpg"},
+						{"id": 3, "medium_url": "https://example.com/3.jpg", "license_code": "cc0"},
 					},
 				},
 			},
@@ -423,7 +426,7 @@ func TestClient_GetRandom_WithExcludeIDs(t *testing.T) {
 						"name": "New Species",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 1, "medium_url": "https://example.com/1.jpg"},
+						{"id": 1, "medium_url": "https://example.com/1.jpg", "license_code": "cc-by-nc"},
 					},
 				},
 			},
@@ -462,7 +465,7 @@ func TestClient_GetRandom_NilTaxon(t *testing.T) {
 						"name": "Valid Species",
 					},
 					"photos": []map[string]interface{}{
-						{"id": 1, "medium_url": "https://example.com/1.jpg"},
+						{"id": 1, "medium_url": "https://example.com/1.jpg", "license_code": "cc-by-nc"},
 					},
 				},
 			},
@@ -483,5 +486,66 @@ func TestClient_GetRandom_NilTaxon(t *testing.T) {
 	// Should only have 1 species (nil taxon skipped)
 	if len(species) != 1 {
 		t.Errorf("GetRandom() returned %d species, want 1 (nil taxon skipped)", len(species))
+	}
+}
+
+func TestClient_GetRandom_FiltersUnlicensedPhotos(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"total_results": 2,
+			"results": []map[string]interface{}{
+				{
+					"id": 1,
+					"taxon": map[string]interface{}{
+						"id":   100,
+						"name": "All Rights Reserved Species",
+					},
+					"photos": []map[string]interface{}{
+						// No license_code: all rights reserved, must not be displayed
+						{"id": 1, "medium_url": "https://example.com/reserved.jpg"},
+						{"id": 2, "medium_url": "https://example.com/nd.jpg", "license_code": "cc-by-nd"},
+					},
+				},
+				{
+					"id": 2,
+					"taxon": map[string]interface{}{
+						"id":   200,
+						"name": "Mixed License Species",
+					},
+					"photos": []map[string]interface{}{
+						{"id": 3, "medium_url": "https://example.com/reserved2.jpg"},
+						{"id": 4, "medium_url": "https://example.com/ok.jpg", "license_code": "cc-by", "attribution": "(c) Someone, CC BY"},
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := inaturalist.NewClient(
+		inaturalist.WithBaseURL(server.URL),
+	)
+
+	species, err := client.GetRandom(context.Background(), ports.SpeciesFilter{})
+	if err != nil {
+		t.Fatalf("GetRandom() error = %v", err)
+	}
+
+	// Species 100 has no CC photo at all and must be skipped entirely
+	if len(species) != 1 {
+		t.Fatalf("GetRandom() returned %d species, want 1 (unlicensed skipped)", len(species))
+	}
+
+	// Species 200 must only keep its CC-licensed photo
+	photos := species[0].Photos()
+	if len(photos) != 1 {
+		t.Fatalf("Species kept %d photos, want 1 (CC-licensed only)", len(photos))
+	}
+	if photos[0].LicenseCode != "cc-by" {
+		t.Errorf("Photo license = %s, want cc-by", photos[0].LicenseCode)
+	}
+	if photos[0].Attribution == "" {
+		t.Error("Photo attribution should be preserved")
 	}
 }

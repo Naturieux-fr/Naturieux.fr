@@ -179,10 +179,12 @@ func (r *SpeciesRepository) getAvailableSpecies(filter ports.SpeciesFilter) []st
 func (r *SpeciesRepository) createSpecies(id int, name, commonName, iconicTaxon, photoURL string) *species.Species {
 	sp, _ := species.New(id, name, commonName, iconicTaxon)
 	sp.AddPhoto(species.Photo{
-		ID:        id * 100,
-		URL:       photoURL,
-		MediumURL: photoURL,
-		LargeURL:  photoURL,
+		ID:          id * 100,
+		URL:         photoURL,
+		MediumURL:   photoURL,
+		LargeURL:    photoURL,
+		Attribution: "(c) iNaturalist community, some rights reserved (CC BY-NC)",
+		LicenseCode: "cc-by-nc",
 	})
 	return sp
 }

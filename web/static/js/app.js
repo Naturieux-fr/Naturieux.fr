@@ -218,6 +218,7 @@ function quizApp() {
             this.question = {
                 id: q.id,
                 mediaUrl: q.media_url,
+                mediaAttribution: q.media_attribution || '',
                 choices: q.choices || []
             };
             this.selectedAnswer = null;

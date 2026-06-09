@@ -241,3 +241,81 @@ func TestQuestionFactory_CreateQuestion_FallbackToRandom(t *testing.T) {
 		t.Fatal("CreateQuestion() returned nil")
 	}
 }
+
+func TestQuestionFactory_CreateQuestion_CrossTaxonFallback(t *testing.T) {
+	correct := createMockSpecies(1, "Lonely Taxon Species")
+	sameTaxonWrong := createMockSpecies(2, "Only Same Taxon Wrong")
+
+	mockRepo := &mockSpeciesRepository{
+		getRandomFunc: func(ctx context.Context, filter ports.SpeciesFilter) ([]*species.Species, error) {
+			if len(filter.ExcludeIDs) == 0 {
+				return []*species.Species{correct}, nil
+			}
+			if filter.IconicTaxon != "" {
+				// Only one other species exists in the same taxon
+				return []*species.Species{sameTaxonWrong}, nil
+			}
+			// Cross-taxon top-up provides the missing choices
+			return []*species.Species{
+				createMockSpecies(3, "Other Taxon 1"),
+				createMockSpecies(4, "Other Taxon 2"),
+			}, nil
+		},
+		getSimilarFunc: func(ctx context.Context, speciesID int, limit int) ([]*species.Species, error) {
+			return nil, errors.New("no similar species")
+		},
+	}
+
+	factory := appquiz.NewQuestionFactory(mockRepo)
+
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	if err != nil {
+		t.Fatalf("CreateQuestion() should top up choices across taxa, got error = %v", err)
+	}
+
+	// Beginner needs 4 choices: correct + 1 same-taxon + 2 cross-taxon
+	if len(question.Choices()) != 4 {
+		t.Errorf("Choices count = %d, want 4 (cross-taxon top-up)", len(question.Choices()))
+	}
+}
+
+func TestQuestionFactory_CreateQuestion_MediaCredit(t *testing.T) {
+	correct, _ := species.New(1, "Credited Species", "Credited", "Mammalia")
+	correct.AddPhoto(species.Photo{
+		ID:          1,
+		MediumURL:   "https://example.com/photo_medium.jpg",
+		LargeURL:    "https://example.com/photo_large.jpg",
+		Attribution: "(c) Jane Doe, some rights reserved (CC BY)",
+		LicenseCode: "cc-by",
+	})
+
+	mockRepo := &mockSpeciesRepository{
+		getRandomFunc: func(ctx context.Context, filter ports.SpeciesFilter) ([]*species.Species, error) {
+			if len(filter.ExcludeIDs) == 0 {
+				return []*species.Species{correct}, nil
+			}
+			return []*species.Species{
+				createMockSpecies(2, "W1"),
+				createMockSpecies(3, "W2"),
+				createMockSpecies(4, "W3"),
+			}, nil
+		},
+		getSimilarFunc: func(ctx context.Context, speciesID int, limit int) ([]*species.Species, error) {
+			return nil, errors.New("no similar species")
+		},
+	}
+
+	factory := appquiz.NewQuestionFactory(mockRepo)
+
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	if err != nil {
+		t.Fatalf("CreateQuestion() error = %v", err)
+	}
+
+	if question.MediaAttribution() != "(c) Jane Doe, some rights reserved (CC BY)" {
+		t.Errorf("MediaAttribution = %q, want photo attribution", question.MediaAttribution())
+	}
+	if question.MediaLicense() != "cc-by" {
+		t.Errorf("MediaLicense = %q, want cc-by", question.MediaLicense())
+	}
+}

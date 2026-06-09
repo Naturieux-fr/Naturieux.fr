@@ -146,6 +146,7 @@
                             <p x-show="timerPaused" class="loading-text">Chargement de l'image...</p>
                         </div>
                     </div>
+                    <p class="photo-credit" x-show="question.mediaAttribution" x-text="question.mediaAttribution"></p>
                 </div>
 
                 <div class="choices-container">
@@ -238,6 +239,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=1.1"></script>
 </body>
 </html>
