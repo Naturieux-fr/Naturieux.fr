@@ -7,7 +7,7 @@
 - [x] **Filtrage des licences photos** : `photo_license=cc0,cc-by,cc-by-nc` sur les requêtes observations + filtre défensif côté client (photo par défaut du taxon exclue de l'affichage). Reste à faire pour les **sons** (`sound_license`) quand le SoundQuiz arrivera.
 - [x] **Attribution des médias** : `license_code` + `attribution` portés jusqu'à l'API (`media_attribution`, `media_license`) et affichés sous l'image du quiz. Amélioration possible : lien vers l'observation d'origine.
 - [x] **Persistance SQLite** : `internal/adapters/sqlite` (driver pur Go `modernc.org/sqlite`), sessions stockées en snapshot JSON + colonnes dénormalisées pour les stats, joueurs persistés (XP, niveaux, achievements). Le store en mémoire du handler est supprimé : les parties survivent à un redémarrage du serveur. Variable `DB_PATH` (défaut `naturieux.db`).
-- [ ] **Cache local des espèces** : pré-charger un pool de taxons/photos (métadonnées seulement, jamais les fichiers) rafraîchi périodiquement, au lieu d'appeler l'API à chaque partie. Respecter ≤ 60 req/min, back-off sur 429.
+- [x] **Cache local des espèces** : `internal/adapters/cache` (décorateur SQLite autour du client iNaturalist). Préchauffage ~60 espèces/taxon au démarrage + toutes les 12 h (1 requête/taxon), TTL 7 jours, dégradation gracieuse vers l'API. Démarrage d'une partie : ~8-10 s → < 25 ms. Reste possible : back-off explicite sur 429 côté client.
 
 ## P1 — Important (expérience de jeu)
 
