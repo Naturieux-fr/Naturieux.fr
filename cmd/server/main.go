@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 	httphandler "github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/mock"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
@@ -42,16 +42,24 @@ func main() {
 		speciesRepo = inaturalist.NewClient()
 	}
 
-	// In-memory player repository (use proper database in production)
-	playerRepo := newInMemoryPlayerRepository()
-
-	// Create a demo player
-	demoPlayer, err := gamification.NewPlayer("demo", "demo_user")
-	if err != nil {
-		log.Fatalf("Failed to create demo player: %v", err)
+	// Open SQLite database for persistence
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "naturieux.db"
 	}
-	if err := playerRepo.Create(context.Background(), demoPlayer); err != nil {
-		log.Fatalf("Failed to store demo player: %v", err)
+	db, err := sqlite.Open(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	log.Printf("Database: %s", dbPath)
+
+	playerRepo := sqlite.NewPlayerRepository(db)
+	sessionRepo := sqlite.NewSessionRepository(db)
+
+	// Ensure the demo player exists
+	if err := ensureDemoPlayer(playerRepo); err != nil {
+		log.Fatalf("Failed to create demo player: %v", err)
 	}
 
 	// Create question factory
@@ -64,7 +72,7 @@ func main() {
 	// Create quiz service
 	quizService := appquiz.NewService(
 		questionFactory,
-		nil, // No session persistence for now
+		sessionRepo,
 		playerRepo,
 		nil, // No event publisher for now
 	)
@@ -147,53 +155,16 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// inMemoryPlayerRepository is a simple in-memory player repository for demo.
-type inMemoryPlayerRepository struct {
-	players map[string]*gamification.Player
-}
-
-func newInMemoryPlayerRepository() *inMemoryPlayerRepository {
-	return &inMemoryPlayerRepository{
-		players: make(map[string]*gamification.Player),
+// ensureDemoPlayer creates the demo player if it does not exist yet.
+func ensureDemoPlayer(playerRepo ports.PlayerRepository) error {
+	ctx := context.Background()
+	if _, err := playerRepo.GetByID(ctx, "demo"); err == nil {
+		return nil
 	}
-}
 
-func (r *inMemoryPlayerRepository) Create(_ context.Context, player *gamification.Player) error {
-	r.players[player.ID()] = player
-	return nil
-}
-
-func (r *inMemoryPlayerRepository) GetByID(_ context.Context, id string) (*gamification.Player, error) {
-	if p, ok := r.players[id]; ok {
-		return p, nil
+	demoPlayer, err := gamification.NewPlayer("demo", "demo_user")
+	if err != nil {
+		return err
 	}
-	return nil, fmt.Errorf("player not found: %s", id)
+	return playerRepo.Create(ctx, demoPlayer)
 }
-
-func (r *inMemoryPlayerRepository) GetByUsername(_ context.Context, username string) (*gamification.Player, error) {
-	for _, p := range r.players {
-		if p.Username() == username {
-			return p, nil
-		}
-	}
-	return nil, fmt.Errorf("player not found: %s", username)
-}
-
-func (r *inMemoryPlayerRepository) Update(_ context.Context, player *gamification.Player) error {
-	r.players[player.ID()] = player
-	return nil
-}
-
-func (r *inMemoryPlayerRepository) GetLeaderboard(_ context.Context, limit int) ([]*gamification.Player, error) {
-	result := make([]*gamification.Player, 0, limit)
-	for _, p := range r.players {
-		result = append(result, p)
-		if len(result) >= limit {
-			break
-		}
-	}
-	return result, nil
-}
-
-// Ensure interface compliance
-var _ ports.PlayerRepository = (*inMemoryPlayerRepository)(nil)

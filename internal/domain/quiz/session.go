@@ -274,3 +274,104 @@ func (s *Session) Duration() time.Duration {
 	}
 	return time.Since(s.startedAt)
 }
+
+// TaxonFilter returns the taxon filter for the session.
+func (s *Session) TaxonFilter() string {
+	return s.taxonFilter
+}
+
+// StartedAt returns when the session started.
+func (s *Session) StartedAt() time.Time {
+	return s.startedAt
+}
+
+// CompletedAt returns when the session ended, or nil if still running.
+func (s *Session) CompletedAt() *time.Time {
+	return s.completedAt
+}
+
+// SessionSnapshot is a serializable representation of a Session, used for
+// persistence and reconstruction.
+type SessionSnapshot struct {
+	ID          string             `json:"id"`
+	UserID      string             `json:"user_id"`
+	Difficulty  Difficulty         `json:"difficulty"`
+	QuizTypes   []QuizType         `json:"quiz_types"`
+	TaxonFilter string             `json:"taxon_filter,omitempty"`
+	Questions   []QuestionSnapshot `json:"questions"`
+	Answers     []Answer           `json:"answers"`
+	TotalScore  int                `json:"total_score"`
+	Streak      int                `json:"streak"`
+	MaxStreak   int                `json:"max_streak"`
+	Status      SessionStatus      `json:"status"`
+	StartedAt   time.Time          `json:"started_at"`
+	CompletedAt *time.Time         `json:"completed_at,omitempty"`
+}
+
+// Snapshot returns a serializable representation of the session.
+func (s *Session) Snapshot() SessionSnapshot {
+	questions := make([]QuestionSnapshot, len(s.questions))
+	for i, q := range s.questions {
+		questions[i] = q.Snapshot()
+	}
+	return SessionSnapshot{
+		ID:          s.id,
+		UserID:      s.userID,
+		Difficulty:  s.difficulty,
+		QuizTypes:   s.quizTypes,
+		TaxonFilter: s.taxonFilter,
+		Questions:   questions,
+		Answers:     s.answers,
+		TotalScore:  s.totalScore,
+		Streak:      s.streak,
+		MaxStreak:   s.maxStreak,
+		Status:      s.status,
+		StartedAt:   s.startedAt,
+		CompletedAt: s.completedAt,
+	}
+}
+
+// RestoreSession reconstructs a Session from a snapshot. The current
+// question index is derived from the number of recorded answers.
+func RestoreSession(snap SessionSnapshot) (*Session, error) {
+	if snap.ID == "" {
+		return nil, errors.New("session id is required")
+	}
+	if snap.UserID == "" {
+		return nil, errors.New("user ID is required")
+	}
+	if len(snap.Questions) == 0 {
+		return nil, errors.New("at least one question is required")
+	}
+
+	questions := make([]*Question, len(snap.Questions))
+	for i, qs := range snap.Questions {
+		q, err := RestoreQuestion(qs)
+		if err != nil {
+			return nil, err
+		}
+		questions[i] = q
+	}
+
+	answers := snap.Answers
+	if answers == nil {
+		answers = make([]Answer, 0, len(questions))
+	}
+
+	return &Session{
+		id:           snap.ID,
+		userID:       snap.UserID,
+		difficulty:   snap.Difficulty,
+		quizTypes:    snap.QuizTypes,
+		taxonFilter:  snap.TaxonFilter,
+		questions:    questions,
+		answers:      answers,
+		currentIndex: len(answers),
+		totalScore:   snap.TotalScore,
+		streak:       snap.Streak,
+		maxStreak:    snap.MaxStreak,
+		status:       snap.Status,
+		startedAt:    snap.StartedAt,
+		completedAt:  snap.CompletedAt,
+	}, nil
+}

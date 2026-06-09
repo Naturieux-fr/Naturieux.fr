@@ -65,7 +65,6 @@ type StartSessionResponse struct {
 	SessionID      string
 	FirstQuestion  *quiz.Question
 	TotalQuestions int
-	Session        *quiz.Session // Added to allow handler to store session
 }
 
 // normalizeRequest applies default values to the request.
@@ -110,7 +109,6 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 		SessionID:      session.ID(),
 		FirstQuestion:  session.CurrentQuestion(),
 		TotalQuestions: len(questions),
-		Session:        session,
 	}, nil
 }
 
@@ -311,6 +309,14 @@ func (s *Service) GetSessionStats(ctx context.Context, userID string) (*ports.Us
 		return nil, errors.New("session repository not configured")
 	}
 	return s.sessionRepo.GetStats(ctx, userID)
+}
+
+// GetSession retrieves a session by ID from the configured repository.
+func (s *Service) GetSession(ctx context.Context, id string) (*quiz.Session, error) {
+	if s.sessionRepo == nil {
+		return nil, ports.ErrNotFound
+	}
+	return s.sessionRepo.GetByID(ctx, id)
 }
 
 // AbandonSession marks a session as abandoned.

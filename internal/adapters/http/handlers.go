@@ -3,17 +3,18 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
 // Handler contains all HTTP handlers.
 type Handler struct {
 	quizService *appquiz.Service
-	sessions    map[string]*quiz.Session // In-memory session store (use proper storage in production)
 	devMode     bool
 }
 
@@ -21,7 +22,6 @@ type Handler struct {
 func NewHandler(quizService *appquiz.Service, devMode bool) *Handler {
 	return &Handler{
 		quizService: quizService,
-		sessions:    make(map[string]*quiz.Session),
 		devMode:     devMode,
 	}
 }
@@ -46,6 +46,15 @@ func writeError(w http.ResponseWriter, status int, message string) {
 		Success: false,
 		Error:   message,
 	})
+}
+
+// writeSessionError maps a session lookup error to an HTTP response.
+func writeSessionError(w http.ResponseWriter, err error) {
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	writeError(w, http.StatusInternalServerError, err.Error())
 }
 
 // writeSuccess writes a success response.
@@ -149,9 +158,6 @@ func (h *Handler) HandleStartSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store session in memory for later use
-	h.sessions[result.SessionID] = result.Session
-
 	response := StartSessionResponse{
 		SessionID:      result.SessionID,
 		TotalQuestions: result.TotalQuestions,
@@ -179,10 +185,9 @@ func (h *Handler) HandleSubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get session (in production, use proper storage)
-	session, ok := h.sessions[req.SessionID]
-	if !ok {
-		writeError(w, http.StatusNotFound, "session not found")
+	session, err := h.quizService.GetSession(r.Context(), req.SessionID)
+	if err != nil {
+		writeSessionError(w, err)
 		return
 	}
 
@@ -232,9 +237,9 @@ func (h *Handler) HandleAbandonSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, ok := h.sessions[req.SessionID]
-	if !ok {
-		writeError(w, http.StatusNotFound, "session not found")
+	session, err := h.quizService.GetSession(r.Context(), req.SessionID)
+	if err != nil {
+		writeSessionError(w, err)
 		return
 	}
 
@@ -243,7 +248,6 @@ func (h *Handler) HandleAbandonSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	delete(h.sessions, req.SessionID)
 	writeSuccess(w, map[string]string{"message": "session abandoned"})
 }
 

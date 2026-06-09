@@ -144,6 +144,67 @@ func (q *Question) CheckAnswer(speciesID int) bool {
 	return q.correctSpecies.ID() == speciesID
 }
 
+// ChoiceSnapshot is a serializable representation of a Choice.
+type ChoiceSnapshot struct {
+	Species   species.Snapshot `json:"species"`
+	IsCorrect bool             `json:"is_correct"`
+}
+
+// QuestionSnapshot is a serializable representation of a Question, used for
+// persistence and reconstruction.
+type QuestionSnapshot struct {
+	ID               string           `json:"id"`
+	QuizType         QuizType         `json:"quiz_type"`
+	Difficulty       Difficulty       `json:"difficulty"`
+	Choices          []ChoiceSnapshot `json:"choices"`
+	MediaURL         string           `json:"media_url"`
+	MediaAttribution string           `json:"media_attribution,omitempty"`
+	MediaLicense     string           `json:"media_license,omitempty"`
+}
+
+// Snapshot returns a serializable representation of the question.
+func (q *Question) Snapshot() QuestionSnapshot {
+	choices := make([]ChoiceSnapshot, len(q.choices))
+	for i, c := range q.choices {
+		choices[i] = ChoiceSnapshot{
+			Species:   c.Species.Snapshot(),
+			IsCorrect: c.IsCorrect,
+		}
+	}
+	return QuestionSnapshot{
+		ID:               q.id,
+		QuizType:         q.quizType,
+		Difficulty:       q.difficulty,
+		Choices:          choices,
+		MediaURL:         q.mediaURL,
+		MediaAttribution: q.mediaAttribution,
+		MediaLicense:     q.mediaLicense,
+	}
+}
+
+// RestoreQuestion reconstructs a Question from a snapshot.
+func RestoreQuestion(snap QuestionSnapshot) (*Question, error) {
+	choices := make([]Choice, len(snap.Choices))
+	var correct *species.Species
+	for i, c := range snap.Choices {
+		sp, err := species.FromSnapshot(c.Species)
+		if err != nil {
+			return nil, err
+		}
+		choices[i] = Choice{Species: sp, IsCorrect: c.IsCorrect}
+		if c.IsCorrect {
+			correct = sp
+		}
+	}
+
+	question, err := NewQuestion(snap.ID, snap.QuizType, snap.Difficulty, correct, choices, snap.MediaURL)
+	if err != nil {
+		return nil, err
+	}
+	question.SetMediaCredit(snap.MediaAttribution, snap.MediaLicense)
+	return question, nil
+}
+
 // CalculateScore calculates score based on time taken and difficulty.
 func (q *Question) CalculateScore(timeTaken time.Duration, isCorrect bool) int {
 	if !isCorrect {

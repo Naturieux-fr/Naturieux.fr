@@ -218,3 +218,63 @@ type LevelUpEvent struct {
 	TotalXP    int
 	OccurredAt time.Time
 }
+
+// PlayerSnapshot is a serializable representation of a Player, used for
+// persistence and reconstruction.
+type PlayerSnapshot struct {
+	ID             string        `json:"id"`
+	Username       string        `json:"username"`
+	TotalXP        int           `json:"total_xp"`
+	Level          int           `json:"level"`
+	TotalGames     int           `json:"total_games"`
+	TotalCorrect   int           `json:"total_correct"`
+	TotalQuestions int           `json:"total_questions"`
+	BestStreak     int           `json:"best_streak"`
+	Achievements   []Achievement `json:"achievements,omitempty"`
+	DailyStreak    int           `json:"daily_streak"`
+	LastPlayedAt   *time.Time    `json:"last_played_at,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
+}
+
+// Snapshot returns a serializable representation of the player.
+func (p *Player) Snapshot() PlayerSnapshot {
+	return PlayerSnapshot{
+		ID:             p.id,
+		Username:       p.username,
+		TotalXP:        p.totalXP,
+		Level:          p.level,
+		TotalGames:     p.totalGames,
+		TotalCorrect:   p.totalCorrect,
+		TotalQuestions: p.totalQuestions,
+		BestStreak:     p.bestStreak,
+		Achievements:   p.achievements,
+		DailyStreak:    p.dailyStreak,
+		LastPlayedAt:   p.lastPlayedAt,
+		CreatedAt:      p.createdAt,
+	}
+}
+
+// RestorePlayer reconstructs a Player from a snapshot.
+func RestorePlayer(snap PlayerSnapshot) (*Player, error) {
+	player, err := NewPlayer(snap.ID, snap.Username)
+	if err != nil {
+		return nil, err
+	}
+	player.totalXP = snap.TotalXP
+	if snap.Level > 0 {
+		player.level = snap.Level
+	}
+	player.totalGames = snap.TotalGames
+	player.totalCorrect = snap.TotalCorrect
+	player.totalQuestions = snap.TotalQuestions
+	player.bestStreak = snap.BestStreak
+	if snap.Achievements != nil {
+		player.achievements = snap.Achievements
+	}
+	player.dailyStreak = snap.DailyStreak
+	player.lastPlayedAt = snap.LastPlayedAt
+	if !snap.CreatedAt.IsZero() {
+		player.createdAt = snap.CreatedAt
+	}
+	return player, nil
+}

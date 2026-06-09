@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.25'
   # Quality Gate Thresholds
   MIN_COVERAGE: 70
   MAX_COMPLEXITY: 15
