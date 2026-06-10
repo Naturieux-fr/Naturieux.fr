@@ -122,7 +122,7 @@ func (s *Service) generateQuestions(ctx context.Context, req StartSessionRequest
 
 	for i := 0; i < req.QuestionCount; i++ {
 		quizType := req.QuizTypes[i%len(req.QuizTypes)]
-		question, err := s.questionFactory.CreateQuestion(ctx, quizType, req.Difficulty)
+		question, err := s.questionFactory.CreateQuestion(ctx, quizType, req.Difficulty, req.TaxonFilter)
 		if err != nil {
 			continue
 		}

@@ -16,8 +16,10 @@ import (
 
 // QuestionFactory creates quiz questions of various types.
 type QuestionFactory interface {
-	// CreateQuestion generates a new question of the specified type and difficulty.
-	CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty) (*quiz.Question, error)
+	// CreateQuestion generates a question of the given type and difficulty,
+	// restricted to taxonFilter (a category); an empty taxonFilter falls back
+	// to the factory's default.
+	CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, taxonFilter string) (*quiz.Question, error)
 }
 
 // questionFactory implements QuestionFactory.
@@ -60,14 +62,21 @@ func (f *questionFactory) CreateQuestion(
 	ctx context.Context,
 	quizType quiz.QuizType,
 	difficulty quiz.Difficulty,
+	taxonFilter string,
 ) (*quiz.Question, error) {
 	config := quiz.DefaultDifficultyConfigs()[difficulty]
+
+	// The per-session category takes precedence over the factory default.
+	taxon := taxonFilter
+	if taxon == "" {
+		taxon = f.taxonFilter
+	}
 
 	// Get random species for the correct answer. The difficulty is passed
 	// through so sources that tag photos by difficulty (TAXREF) can prefer
 	// a photo matching the session level.
 	filter := ports.SpeciesFilter{
-		IconicTaxon: f.taxonFilter,
+		IconicTaxon: taxon,
 		PlaceID:     f.placeID,
 		Limit:       1,
 		HasPhotos:   true,

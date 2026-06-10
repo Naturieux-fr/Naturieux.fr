@@ -29,8 +29,8 @@ var pngBytes = []byte{
 	0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 }
 
-const adminSampleTAXREF = "taxonID\tacceptedNameUsageID\tparentNameUsageID\tscientificName\tkingdom\tclass\torder\tfamily\tgenus\ttaxonRank\tvernacularName\n" +
-	"60585\t60585\t198937\tVulpes vulpes\tAnimalia\tMammalia\tCarnivora\tCanidae\tVulpes\tspecies\tRenard roux\n"
+const adminSampleTAXREF = "CD_NOM\tCD_REF\tCD_TAXSUP\tRANG\tLB_NOM\tNOM_VERN\tREGNE\tCLASSE\tORDRE\tFAMILLE\tGROUP2_INPN\tFR\n" +
+	"60585\t60585\t198937\tES\tVulpes vulpes\tRenard roux\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n"
 
 // newAdminTest builds an admin handler backed by real SQLite + TAXREF, with a
 // seeded admin account, and returns the handler plus a valid token.

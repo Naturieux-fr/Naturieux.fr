@@ -12,19 +12,20 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
-// sampleTAXREF is a minimal Darwin Core extract: a header plus a few rows
-// covering a valid species, a synonym, a non-species rank, and two families.
-const sampleTAXREF = "taxonID\tacceptedNameUsageID\tparentNameUsageID\tscientificName\tkingdom\tclass\torder\tfamily\tgenus\ttaxonRank\tvernacularName\n" +
+// sampleTAXREF is a minimal native TAXREF extract: a header plus a few rows
+// covering valid species, a synonym, and a non-species rank. The genus is
+// derived from LB_NOM (the native file has no genus column).
+const sampleTAXREF = "CD_NOM\tCD_REF\tCD_TAXSUP\tRANG\tLB_NOM\tNOM_VERN\tREGNE\tCLASSE\tORDRE\tFAMILLE\tGROUP2_INPN\tFR\n" +
 	// Valid mammals (Canidae / Vulpes)
-	"60585\t60585\t198937\tVulpes vulpes\tAnimalia\tMammalia\tCarnivora\tCanidae\tVulpes\tspecies\tRenard roux, Renard, Goupil\n" +
-	"60577\t60577\t198937\tCanis lupus\tAnimalia\tMammalia\tCarnivora\tCanidae\tCanis\tspecies\tLoup gris\n" +
-	"60596\t60596\t198937\tMeles meles\tAnimalia\tMammalia\tCarnivora\tMustelidae\tMeles\tspecies\tBlaireau européen\n" +
+	"60585\t60585\t198937\tES\tVulpes vulpes\tRenard roux, Renard, Goupil\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n" +
+	"60577\t60577\t198937\tES\tCanis lupus\tLoup gris\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n" +
+	"60596\t60596\t198937\tES\tMeles meles\tBlaireau européen\tAnimalia\tMammalia\tCarnivora\tMustelidae\tMammifères\tP\n" +
 	// A bird
-	"3371\t3371\t2222\tColumba palumbus\tAnimalia\tAves\tColumbiformes\tColumbidae\tColumba\tspecies\tPigeon ramier\n" +
-	// A synonym (taxonID != acceptedNameUsageID) — must be skipped
-	"99999\t60585\t198937\tVulpes vulgaris\tAnimalia\tMammalia\tCarnivora\tCanidae\tVulpes\tspecies\tvieux synonyme\n" +
+	"3371\t3371\t2222\tES\tColumba palumbus\tPigeon ramier\tAnimalia\tAves\tColumbiformes\tColumbidae\tOiseaux\tP\n" +
+	// A synonym (CD_NOM != CD_REF) — must be skipped
+	"99999\t60585\t198937\tES\tVulpes vulgaris\tvieux synonyme\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n" +
 	// A genus rank — must be skipped (not a species)
-	"198937\t198937\t0\tVulpes\tAnimalia\tMammalia\tCarnivora\tCanidae\tVulpes\tgenus\t\n"
+	"198937\t198937\t0\tGN\tVulpes\t\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n"
 
 func newTestRepo(t *testing.T) *taxref.Repository {
 	t.Helper()
@@ -90,8 +91,8 @@ func TestRepository_GetByID(t *testing.T) {
 	if sp.CommonName() != "Renard roux" {
 		t.Errorf("CommonName = %s, want Renard roux", sp.CommonName())
 	}
-	if sp.IconicTaxon() != "Mammalia" {
-		t.Errorf("IconicTaxon = %s, want Mammalia", sp.IconicTaxon())
+	if sp.IconicTaxon() != "Mammifères" {
+		t.Errorf("IconicTaxon = %s, want Mammifères", sp.IconicTaxon())
 	}
 }
 
@@ -271,7 +272,7 @@ func TestRepository_GetSimilar_PrefersGenusThenFamily(t *testing.T) {
 		if sp.ID() == 60577 {
 			t.Error("GetSimilar() must not include the target species")
 		}
-		if sp.IconicTaxon() != "Mammalia" {
+		if sp.IconicTaxon() != "Mammifères" {
 			t.Errorf("distractor %s is not a mammal", sp.ScientificName())
 		}
 	}
@@ -302,6 +303,22 @@ func TestRepository_GetSimilar_RanksByProximity(t *testing.T) {
 	}
 	if posMeles != -1 && posCanis > posMeles {
 		t.Errorf("same-family Canis (pos %d) should rank before same-order Meles (pos %d)", posCanis, posMeles)
+	}
+}
+
+func TestRepository_CdNomByScientificName(t *testing.T) {
+	repo := newTestRepo(t)
+
+	cdNom, err := repo.CdNomByScientificName(context.Background(), "Vulpes vulpes")
+	if err != nil {
+		t.Fatalf("CdNomByScientificName() error = %v", err)
+	}
+	if cdNom != 60585 {
+		t.Errorf("cd_nom = %d, want 60585", cdNom)
+	}
+
+	if _, err := repo.CdNomByScientificName(context.Background(), "Inexistus inexistus"); !errors.Is(err, ports.ErrNotFound) {
+		t.Errorf("unknown name error = %v, want ErrNotFound", err)
 	}
 }
 

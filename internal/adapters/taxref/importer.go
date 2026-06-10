@@ -1,17 +1,13 @@
 package taxref
 
 import (
-	"bufio"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 )
-
-// maxLineBytes is the scanner buffer ceiling; TAXREF rows are short but a few
-// names with long authorship strings can exceed the default 64 KB token.
-const maxLineBytes = 1024 * 1024
 
 // ImportStats summarizes an import run.
 type ImportStats struct {
@@ -20,26 +16,33 @@ type ImportStats struct {
 	Skipped  int // rows filtered out (synonyms, unwanted ranks, malformed)
 }
 
-// allowedRanks are the Darwin Core taxonRank values kept for the quiz pool.
+// allowedRanks are the TAXREF RANG values kept for the quiz pool ("ES" =
+// espèce / species).
 var allowedRanks = map[string]bool{
-	"species": true,
+	"ES": true,
 }
 
-// Import loads a TAXREF Darwin Core taxon file (TSV, UTF-8, header on the
-// first line) into the database. Only valid taxa (taxonID == acceptedName
-// UsageID) of an allowed rank are kept. The whole load runs in one
-// transaction for speed. Columns are mapped by header name, not position, so
-// the import survives column reordering between TAXREF versions.
+// requiredColumns must be present in the native TAXREF header.
+var requiredColumns = []string{"CD_NOM", "CD_REF", "RANG", "LB_NOM"}
+
+// Import loads the native INPN TAXREF file (TAXREFv18.txt: tab-separated,
+// quoted fields, UTF-8, header on the first line) into the database. Only
+// valid species (CD_NOM == CD_REF, RANG == "ES") are kept. The whole load
+// runs in one transaction. Columns are mapped by header name, so the import
+// survives column reordering between TAXREF versions.
 func Import(db *sql.DB, r io.Reader) (ImportStats, error) {
 	var stats ImportStats
 
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
+	reader := csv.NewReader(r)
+	reader.Comma = '\t'
+	reader.LazyQuotes = true
+	reader.FieldsPerRecord = -1
 
-	if !scanner.Scan() {
-		return stats, fmt.Errorf("taxref import: empty input")
+	header, err := reader.Read()
+	if err != nil {
+		return stats, fmt.Errorf("taxref import: reading header: %w", err)
 	}
-	col, err := mapColumns(scanner.Text())
+	col, err := mapColumns(header)
 	if err != nil {
 		return stats, err
 	}
@@ -53,16 +56,22 @@ func Import(db *sql.DB, r io.Reader) (ImportStats, error) {
 	stmt, err := tx.Prepare(`
 		INSERT INTO taxref_species
 			(cd_nom, cd_ref, cd_taxsup, rang, scientific_name, vernacular_name,
-			 kingdom, class, ordre, family, genus)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 kingdom, class, ordre, family, genus, taxa_group, fr)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(cd_nom) DO NOTHING`)
 	if err != nil {
 		return stats, fmt.Errorf("taxref import: prepare: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), "\t")
+	for {
+		fields, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return stats, fmt.Errorf("taxref import: read: %w", err)
+		}
 		stats.Read++
 
 		row, ok := col.parseRow(fields)
@@ -73,13 +82,10 @@ func Import(db *sql.DB, r io.Reader) (ImportStats, error) {
 
 		if _, err := stmt.Exec(row.cdNom, row.cdRef, row.cdTaxSup, row.rang,
 			row.scientificName, row.vernacularName, row.kingdom, row.class,
-			row.ordre, row.family, row.genus); err != nil {
+			row.ordre, row.family, row.genus, row.group, row.fr); err != nil {
 			return stats, fmt.Errorf("taxref import: insert cd_nom %d: %w", row.cdNom, err)
 		}
 		stats.Imported++
-	}
-	if err := scanner.Err(); err != nil {
-		return stats, fmt.Errorf("taxref import: read: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -99,18 +105,13 @@ func SetMeta(db *sql.DB, key, value string) error {
 	return nil
 }
 
-// columns maps Darwin Core field names to their position in a row.
+// columns maps TAXREF field names to their position in a row.
 type columns map[string]int
 
-// requiredColumns must be present in the header for the import to proceed.
-var requiredColumns = []string{
-	"taxonID", "acceptedNameUsageID", "scientificName", "taxonRank",
-}
-
 // mapColumns builds a name→index map from the header line.
-func mapColumns(header string) (columns, error) {
+func mapColumns(header []string) (columns, error) {
 	col := make(columns)
-	for i, name := range strings.Split(header, "\t") {
+	for i, name := range header {
 		col[strings.TrimSpace(name)] = i
 	}
 	for _, name := range requiredColumns {
@@ -134,6 +135,8 @@ type taxonRow struct {
 	ordre          string
 	family         string
 	genus          string
+	group          string
+	fr             string
 }
 
 // parseRow extracts and filters one data row. It returns ok=false for
@@ -147,11 +150,11 @@ func (c columns) parseRow(fields []string) (taxonRow, bool) {
 		return strings.TrimSpace(fields[i])
 	}
 
-	cdNom, err := strconv.Atoi(get("taxonID"))
+	cdNom, err := strconv.Atoi(get("CD_NOM"))
 	if err != nil {
 		return taxonRow{}, false
 	}
-	cdRef, err := strconv.Atoi(get("acceptedNameUsageID"))
+	cdRef, err := strconv.Atoi(get("CD_REF"))
 	if err != nil {
 		return taxonRow{}, false
 	}
@@ -160,17 +163,17 @@ func (c columns) parseRow(fields []string) (taxonRow, bool) {
 		return taxonRow{}, false
 	}
 
-	rang := get("taxonRank")
+	rang := get("RANG")
 	if !allowedRanks[rang] {
 		return taxonRow{}, false
 	}
 
-	name := get("scientificName")
+	name := get("LB_NOM")
 	if name == "" {
 		return taxonRow{}, false
 	}
 
-	cdTaxSup, _ := strconv.Atoi(get("parentNameUsageID"))
+	cdTaxSup, _ := strconv.Atoi(get("CD_TAXSUP"))
 
 	return taxonRow{
 		cdNom:          cdNom,
@@ -178,11 +181,22 @@ func (c columns) parseRow(fields []string) (taxonRow, bool) {
 		cdTaxSup:       cdTaxSup,
 		rang:           rang,
 		scientificName: name,
-		vernacularName: get("vernacularName"),
-		kingdom:        get("kingdom"),
-		class:          get("class"),
-		ordre:          get("order"),
-		family:         get("family"),
-		genus:          get("genus"),
+		vernacularName: get("NOM_VERN"),
+		kingdom:        get("REGNE"),
+		class:          get("CLASSE"),
+		ordre:          get("ORDRE"),
+		family:         get("FAMILLE"),
+		genus:          genusOf(name),
+		group:          get("GROUP2_INPN"),
+		fr:             get("FR"),
 	}, true
+}
+
+// genusOf extracts the genus from a binomial scientific name (the first
+// word). TAXREF's native file has no denormalized genus column.
+func genusOf(scientificName string) string {
+	if i := strings.IndexByte(scientificName, ' '); i > 0 {
+		return scientificName[:i]
+	}
+	return scientificName
 }

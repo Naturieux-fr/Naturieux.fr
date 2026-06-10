@@ -72,7 +72,7 @@ func newMockQuestionFactory() *mockQuestionFactory {
 	}
 }
 
-func (m *mockQuestionFactory) CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty) (*quiz.Question, error) {
+func (m *mockQuestionFactory) CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, taxonFilter string) (*quiz.Question, error) {
 	if m.index >= len(m.questions) {
 		// Create a default question
 		sp, _ := species.New(m.index+1, "Test Species", "Test Common", "Mammalia")

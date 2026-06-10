@@ -1,12 +1,14 @@
-// Command importtaxref loads a TAXREF Darwin Core taxon file into the SQLite
+// Command importtaxref loads the native INPN TAXREF file into the SQLite
 // database used by the server.
 //
 // Usage:
 //
-//	importtaxref -file path/to/taxon.txt [-db naturieux.db] [-version v18.0]
+//	importtaxref -file path/to/TAXREFv18.txt [-db naturieux.db] [-version v18.0]
 //
-// The taxon file is the `taxon.txt` extracted from the TAXREF Darwin Core
-// archive (https://ipt.gbif.fr/archive.do?r=taxref, CC-BY 4.0).
+// The file is TAXREFvNN.txt from the native TAXREF archive (INPN, Licence
+// Ouverte). The native file carries the GROUP1/2/3_INPN columns used for the
+// quiz categories (Mammifères, Oiseaux, Reptiles, Amphibiens…) and the FR
+// metropolitan-presence column — unlike the reduced GBIF Darwin Core export.
 package main
 
 import (

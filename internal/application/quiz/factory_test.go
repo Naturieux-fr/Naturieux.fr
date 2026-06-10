@@ -75,7 +75,7 @@ func TestQuestionFactory_CreateQuestion(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err != nil {
 		t.Fatalf("CreateQuestion() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestQuestionFactory_CreateQuestion_NoSpeciesFound(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	_, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	_, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err == nil {
 		t.Error("CreateQuestion() should return error when no species found")
 	}
@@ -148,7 +148,7 @@ func TestQuestionFactory_CreateQuestion_WithFilters(t *testing.T) {
 		appquiz.WithPlaceFilter(6753), // France
 	)
 
-	_, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	_, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err != nil {
 		t.Fatalf("CreateQuestion() error = %v", err)
 	}
@@ -183,7 +183,7 @@ func TestQuestionFactory_CreateQuestion_ExpertDifficulty(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Expert)
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Expert, "")
 	if err != nil {
 		t.Fatalf("CreateQuestion() error = %v", err)
 	}
@@ -206,7 +206,7 @@ func TestQuestionFactory_CreateQuestion_SpeciesNoPhotos(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	_, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	_, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err == nil {
 		t.Error("CreateQuestion() should return error when species has no photos")
 	}
@@ -232,7 +232,7 @@ func TestQuestionFactory_CreateQuestion_FallbackToRandom(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err != nil {
 		t.Fatalf("CreateQuestion() should fall back to random, got error = %v", err)
 	}
@@ -268,7 +268,7 @@ func TestQuestionFactory_CreateQuestion_CrossTaxonFallback(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err != nil {
 		t.Fatalf("CreateQuestion() should top up choices across taxa, got error = %v", err)
 	}
@@ -307,7 +307,7 @@ func TestQuestionFactory_CreateQuestion_MediaCredit(t *testing.T) {
 
 	factory := appquiz.NewQuestionFactory(mockRepo)
 
-	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner)
+	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err != nil {
 		t.Fatalf("CreateQuestion() error = %v", err)
 	}

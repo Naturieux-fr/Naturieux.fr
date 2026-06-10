@@ -22,41 +22,55 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// classTaxa are the iconic-taxon categories that map to the TAXREF `class`
-// column; the rest (Plantae, Fungi) map to `kingdom`.
-var classTaxa = map[string]bool{
-	"Mammalia": true, "Aves": true, "Reptilia": true,
-	"Amphibia": true, "Insecta": true,
+// categoryRule maps a quiz category to a TAXREF column + value. Animal groups
+// use the INPN group (GROUP2_INPN), which cleanly separates Reptiles,
+// Amphibiens, etc. — unlike `class`, which TAXREF leaves empty for reptiles.
+// Plants and fungi use the kingdom (REGNE).
+type categoryRule struct{ column, value string }
+
+// categoryRules accepts both the frontend's English iconic-taxon values and
+// the French INPN group labels (so a species' own group round-trips through
+// the distractor fallback).
+var categoryRules = map[string]categoryRule{
+	// English (frontend categories) → INPN group / kingdom
+	"Mammalia": {"taxa_group", "Mammifères"},
+	"Aves":     {"taxa_group", "Oiseaux"},
+	"Reptilia": {"taxa_group", "Reptiles"},
+	"Amphibia": {"taxa_group", "Amphibiens"},
+	"Insecta":  {"taxa_group", "Insectes"},
+	"Plantae":  {"kingdom", "Plantae"},
+	"Fungi":    {"kingdom", "Fungi"},
+	// French INPN group labels (a species' iconic taxon is its group)
+	"Mammifères": {"taxa_group", "Mammifères"},
+	"Oiseaux":    {"taxa_group", "Oiseaux"},
+	"Reptiles":   {"taxa_group", "Reptiles"},
+	"Amphibiens": {"taxa_group", "Amphibiens"},
+	"Insectes":   {"taxa_group", "Insectes"},
+	"Poissons":   {"taxa_group", "Poissons"},
 }
 
 // categoryFilter maps a UI category to the TAXREF column and value to filter
-// on. An empty category matches everything.
+// on. An empty or unknown category matches everything.
 func categoryFilter(category string) (column, value string) {
-	if category == "" {
-		return "", ""
+	if rule, ok := categoryRules[category]; ok {
+		return rule.column, rule.value
 	}
-	if classTaxa[category] {
-		return "class", category
-	}
-	return "kingdom", category
+	return "", ""
 }
 
-// iconicTaxonOf derives the app's iconic-taxon label from TAXREF ranks.
-func iconicTaxonOf(class, kingdom string) string {
-	if classTaxa[class] {
-		return class
+// iconicTaxonOf derives the app's iconic-taxon label: the INPN group when
+// known, otherwise the kingdom.
+func iconicTaxonOf(group, kingdom string) string {
+	if group != "" {
+		return group
 	}
-	if kingdom == "Plantae" || kingdom == "Fungi" {
-		return kingdom
-	}
-	return class
+	return kingdom
 }
 
 // GetByID retrieves a species (with its photos) by its TAXREF id.
 func (r *Repository) GetByID(ctx context.Context, id int) (*species.Species, error) {
-	row := r.db.QueryRowContext(ctx, `
-		SELECT cd_nom, scientific_name, vernacular_name, class, kingdom
-		FROM taxref_species WHERE cd_nom = ?`, id)
+	row := r.db.QueryRowContext(ctx,
+		`SELECT `+speciesColumns+` FROM taxref_species WHERE cd_nom = ?`, id)
 
 	sp, err := r.scanSpecies(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -112,7 +126,7 @@ func (r *Repository) GetRandom(ctx context.Context, filter ports.SpeciesFilter) 
 // non-empty, restricts to photos at that level. extraExclude augments the
 // filter's excluded ids.
 func (r *Repository) randomSpecies(ctx context.Context, filter ports.SpeciesFilter, difficulty string, limit int, extraExclude []int) ([]*species.Species, error) {
-	const cols = `s.cd_nom, s.scientific_name, s.vernacular_name, s.class, s.kingdom`
+	cols := "s." + strings.ReplaceAll(speciesColumns, ", ", ", s.")
 
 	var query string
 	var where []string
@@ -181,7 +195,7 @@ func (r *Repository) GetSimilar(ctx context.Context, speciesID int, limit int) (
 	// closest-first and randomized within each proximity tier. Empty rank
 	// values can never match a real row, so they are harmless.
 	return r.querySpecies(ctx, `
-		SELECT cd_nom, scientific_name, vernacular_name, class, kingdom
+		SELECT `+speciesColumns+`
 		FROM taxref_species
 		WHERE cd_nom != ?
 		  AND (genus = ? OR family = ? OR ordre = ?)
@@ -212,9 +226,8 @@ func (r *Repository) Search(ctx context.Context, query string, limit int) ([]*sp
 		limit = 10
 	}
 	like := "%" + query + "%"
-	return r.querySpecies(ctx, `
-		SELECT cd_nom, scientific_name, vernacular_name, class, kingdom
-		FROM taxref_species
+	return r.querySpecies(ctx,
+		`SELECT `+speciesColumns+` FROM taxref_species
 		WHERE scientific_name LIKE ? OR vernacular_name LIKE ?
 		ORDER BY scientific_name LIMIT ?`, like, like, limit)
 }
@@ -243,19 +256,22 @@ type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
 
+// speciesColumns is the column list scanned by scanSpecies.
+const speciesColumns = "cd_nom, scientific_name, vernacular_name, taxa_group, kingdom"
+
 // scanSpecies reads the standard species columns and builds a domain Species.
 func (r *Repository) scanSpecies(row rowScanner) (*species.Species, error) {
 	var (
 		cdNom          int
 		scientific     string
 		vernacular     string
-		class, kingdom string
+		group, kingdom string
 	)
-	if err := row.Scan(&cdNom, &scientific, &vernacular, &class, &kingdom); err != nil {
+	if err := row.Scan(&cdNom, &scientific, &vernacular, &group, &kingdom); err != nil {
 		return nil, err
 	}
 
-	sp, err := species.New(cdNom, scientific, firstVernacular(vernacular), iconicTaxonOf(class, kingdom))
+	sp, err := species.New(cdNom, scientific, firstVernacular(vernacular), iconicTaxonOf(group, kingdom))
 	if err != nil {
 		return nil, fmt.Errorf("taxref build species %d: %w", cdNom, err)
 	}
@@ -368,6 +384,21 @@ func (r *Repository) DeletePhoto(ctx context.Context, id int) error {
 		return ports.ErrNotFound
 	}
 	return nil
+}
+
+// CdNomByScientificName resolves an exact scientific name to its cd_nom.
+// Returns ErrNotFound when no valid species matches.
+func (r *Repository) CdNomByScientificName(ctx context.Context, name string) (int, error) {
+	var cdNom int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT cd_nom FROM taxref_species WHERE scientific_name = ? LIMIT 1`, name).Scan(&cdNom)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ports.ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("taxref lookup %q: %w", name, err)
+	}
+	return cdNom, nil
 }
 
 // CountSpecies returns how many taxa are loaded (useful for diagnostics).

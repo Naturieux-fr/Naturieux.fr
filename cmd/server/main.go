@@ -97,10 +97,11 @@ func main() {
 	authService := adminapp.NewService(playerRepo, authSecret())
 	seedAdminFromEnv(authService)
 	taxrefRepo, _ := speciesRepo.(*taxref.Repository) // nil unless SPECIES_SOURCE=taxref
-	mediaStore, err := buildStorage(backgroundCtx)
+	mediaStore, err := storage.FromEnv(backgroundCtx)
 	if err != nil {
 		log.Fatalf("Failed to initialize media storage: %v", err)
 	}
+	log.Printf("🗄️  Media storage ready")
 	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo, mediaStore)
 
 	// Create HTTP server
@@ -228,30 +229,6 @@ func buildSpeciesRepo(ctx context.Context, db *sql.DB, devMode bool) (ports.Spec
 		go speciesCache.StartAutoWarm(ctx, cache.DefaultWarmInterval, cache.WarmTaxa, cache.DefaultWarmTarget)
 		return speciesCache, nil
 	}
-}
-
-// buildStorage selects the media backend from STORAGE: "s3" for an
-// S3-compatible store (AWS S3 / MinIO), anything else for local disk.
-func buildStorage(ctx context.Context) (httphandler.MediaStore, error) {
-	if os.Getenv("STORAGE") == "s3" {
-		log.Println("🗄️  Media storage: S3-compatible object store")
-		return storage.NewS3(ctx, storage.S3Config{
-			Endpoint:  os.Getenv("S3_ENDPOINT"),
-			Bucket:    os.Getenv("S3_BUCKET"),
-			AccessKey: os.Getenv("S3_ACCESS_KEY"),
-			SecretKey: os.Getenv("S3_SECRET_KEY"),
-			Region:    os.Getenv("S3_REGION"),
-			UseSSL:    os.Getenv("S3_USE_SSL") == "true" || os.Getenv("S3_USE_SSL") == "1",
-			PublicURL: os.Getenv("S3_PUBLIC_URL"),
-		})
-	}
-
-	dir := os.Getenv("MEDIA_DIR")
-	if dir == "" {
-		dir = "media"
-	}
-	log.Printf("🗄️  Media storage: local disk (%s)", dir)
-	return storage.NewLocal(dir)
 }
 
 // authSecret returns the token-signing secret from AUTH_SECRET, or a random

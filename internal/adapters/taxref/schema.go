@@ -26,11 +26,13 @@ CREATE TABLE IF NOT EXISTS taxref_species (
 	class           TEXT NOT NULL DEFAULT '',
 	ordre           TEXT NOT NULL DEFAULT '',
 	family          TEXT NOT NULL DEFAULT '',
-	genus           TEXT NOT NULL DEFAULT ''
+	genus           TEXT NOT NULL DEFAULT '',
+	taxa_group      TEXT NOT NULL DEFAULT '',
+	fr              TEXT NOT NULL DEFAULT ''
 );
 
-CREATE INDEX IF NOT EXISTS idx_taxref_class  ON taxref_species(class);
-CREATE INDEX IF NOT EXISTS idx_taxref_ordre  ON taxref_species(ordre);
+CREATE INDEX IF NOT EXISTS idx_taxref_group  ON taxref_species(taxa_group);
+CREATE INDEX IF NOT EXISTS idx_taxref_kingdom ON taxref_species(kingdom);
 CREATE INDEX IF NOT EXISTS idx_taxref_family ON taxref_species(family);
 CREATE INDEX IF NOT EXISTS idx_taxref_genus  ON taxref_species(genus);
 
@@ -60,14 +62,21 @@ func EnsureSchema(db *sql.DB) error {
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("applying taxref schema: %w", err)
 	}
-	// Add the per-photo difficulty column to databases created before it.
-	has, err := columnExists(db, "taxref_photos", "difficulty")
-	if err != nil {
-		return err
-	}
-	if !has {
-		if _, err := db.Exec(`ALTER TABLE taxref_photos ADD COLUMN difficulty TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("migrating taxref_photos.difficulty: %w", err)
+	// Add columns introduced after the initial schema, for older databases.
+	for _, c := range []struct{ table, column, def string }{
+		{"taxref_photos", "difficulty", "TEXT NOT NULL DEFAULT ''"},
+		{"taxref_species", "taxa_group", "TEXT NOT NULL DEFAULT ''"},
+		{"taxref_species", "fr", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		has, err := columnExists(db, c.table, c.column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec("ALTER TABLE " + c.table + " ADD COLUMN " + c.column + " " + c.def); err != nil {
+			return fmt.Errorf("migrating %s.%s: %w", c.table, c.column, err)
 		}
 	}
 	return nil
