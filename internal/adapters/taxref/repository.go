@@ -84,6 +84,34 @@ func (r *Repository) GetRandom(ctx context.Context, filter ports.SpeciesFilter) 
 		limit = 1
 	}
 
+	// Prefer photos at the requested difficulty, but fall back to any so a
+	// session never runs dry when a difficulty has too few photos.
+	speciesList, err := r.randomSpecies(ctx, filter, filter.Difficulty, limit, nil)
+	if err != nil {
+		return nil, err
+	}
+	if filter.HasPhotos && filter.Difficulty != "" && len(speciesList) < limit {
+		exclude := append(append([]int{}, filter.ExcludeIDs...), idsOf(speciesList)...)
+		more, err := r.randomSpecies(ctx, filter, "", limit-len(speciesList), exclude)
+		if err != nil {
+			return nil, err
+		}
+		speciesList = append(speciesList, more...)
+	}
+
+	for _, sp := range speciesList {
+		if err := r.attachPhotos(ctx, sp); err != nil {
+			return nil, err
+		}
+	}
+	return speciesList, nil
+}
+
+// randomSpecies runs one random-selection query. When the filter requires
+// photos the query is driven from the (small) photo table; difficulty, when
+// non-empty, restricts to photos at that level. extraExclude augments the
+// filter's excluded ids.
+func (r *Repository) randomSpecies(ctx context.Context, filter ports.SpeciesFilter, difficulty string, limit int, extraExclude []int) ([]*species.Species, error) {
 	const cols = `s.cd_nom, s.scientific_name, s.vernacular_name, s.class, s.kingdom`
 
 	var query string
@@ -91,9 +119,11 @@ func (r *Repository) GetRandom(ctx context.Context, filter ports.SpeciesFilter) 
 	var args []interface{}
 
 	if filter.HasPhotos {
-		// Drive from taxref_photos (small) and join the reference.
-		query = `SELECT ` + cols + `
-			FROM taxref_photos p JOIN taxref_species s ON s.cd_nom = p.cd_nom`
+		query = `SELECT ` + cols + ` FROM taxref_photos p JOIN taxref_species s ON s.cd_nom = p.cd_nom`
+		if difficulty != "" {
+			where = append(where, "p.difficulty = ?")
+			args = append(args, difficulty)
+		}
 	} else {
 		query = `SELECT ` + cols + ` FROM taxref_species s`
 	}
@@ -102,9 +132,10 @@ func (r *Repository) GetRandom(ctx context.Context, filter ports.SpeciesFilter) 
 		where = append(where, "s."+col+" = ?")
 		args = append(args, val)
 	}
-	if len(filter.ExcludeIDs) > 0 {
-		where = append(where, "s.cd_nom NOT IN ("+placeholders(len(filter.ExcludeIDs))+")")
-		for _, id := range filter.ExcludeIDs {
+	exclude := append(append([]int{}, filter.ExcludeIDs...), extraExclude...)
+	if len(exclude) > 0 {
+		where = append(where, "s.cd_nom NOT IN ("+placeholders(len(exclude))+")")
+		for _, id := range exclude {
 			args = append(args, id)
 		}
 	}
@@ -118,16 +149,16 @@ func (r *Repository) GetRandom(ctx context.Context, filter ports.SpeciesFilter) 
 	query += " ORDER BY RANDOM() LIMIT ?"
 	args = append(args, limit)
 
-	speciesList, err := r.querySpecies(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	return r.querySpecies(ctx, query, args...)
+}
+
+// idsOf returns the cd_nom of each species.
+func idsOf(list []*species.Species) []int {
+	ids := make([]int, len(list))
+	for i, sp := range list {
+		ids[i] = sp.ID()
 	}
-	for _, sp := range speciesList {
-		if err := r.attachPhotos(ctx, sp); err != nil {
-			return nil, err
-		}
-	}
-	return speciesList, nil
+	return ids
 }
 
 // GetSimilar returns species taxonomically close to the given one, ranked by
@@ -274,13 +305,67 @@ func placeholders(n int) string {
 	return strings.Repeat("?,", n-1) + "?"
 }
 
-// AddPhoto inserts a locally owned photo for a taxon. Helper for tooling.
-func (r *Repository) AddPhoto(ctx context.Context, cdNom int, url, attribution, license string) error {
-	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO taxref_photos (cd_nom, url, attribution, license)
-		VALUES (?, ?, ?, ?)`, cdNom, url, attribution, license)
+// PhotoRecord is an owned photo as managed by the back-office.
+type PhotoRecord struct {
+	ID          int    `json:"id"`
+	CdNom       int    `json:"cd_nom"`
+	URL         string `json:"url"`
+	Attribution string `json:"attribution"`
+	License     string `json:"license"`
+	Difficulty  string `json:"difficulty"`
+}
+
+// AddPhoto inserts a locally owned photo for a taxon and returns its id.
+// The taxon must exist in the reference.
+func (r *Repository) AddPhoto(ctx context.Context, cdNom int, url, attribution, license, difficulty string) (int, error) {
+	var exists int
+	err := r.db.QueryRowContext(ctx, `SELECT 1 FROM taxref_species WHERE cd_nom = ?`, cdNom).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ports.ErrNotFound
+	}
 	if err != nil {
-		return fmt.Errorf("taxref add photo: %w", err)
+		return 0, fmt.Errorf("taxref add photo: %w", err)
+	}
+
+	res, err := r.db.ExecContext(ctx, `
+		INSERT INTO taxref_photos (cd_nom, url, attribution, license, difficulty)
+		VALUES (?, ?, ?, ?, ?)`, cdNom, url, attribution, license, difficulty)
+	if err != nil {
+		return 0, fmt.Errorf("taxref add photo: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id), nil
+}
+
+// ListPhotos returns the owned photos for a taxon.
+func (r *Repository) ListPhotos(ctx context.Context, cdNom int) ([]PhotoRecord, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, cd_nom, url, attribution, license, difficulty
+		FROM taxref_photos WHERE cd_nom = ? ORDER BY id`, cdNom)
+	if err != nil {
+		return nil, fmt.Errorf("taxref list photos: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	photos := make([]PhotoRecord, 0)
+	for rows.Next() {
+		var p PhotoRecord
+		if err := rows.Scan(&p.ID, &p.CdNom, &p.URL, &p.Attribution, &p.License, &p.Difficulty); err != nil {
+			return nil, fmt.Errorf("scanning photo: %w", err)
+		}
+		photos = append(photos, p)
+	}
+	return photos, rows.Err()
+}
+
+// DeletePhoto removes an owned photo by its id.
+func (r *Repository) DeletePhoto(ctx context.Context, id int) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM taxref_photos WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("taxref delete photo: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ports.ErrNotFound
 	}
 	return nil
 }

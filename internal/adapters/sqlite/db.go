@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS players (
 	daily_streak    INTEGER NOT NULL DEFAULT 0,
 	achievements    TEXT NOT NULL DEFAULT '[]',
 	last_played_at  TEXT,
-	created_at      TEXT NOT NULL
+	created_at      TEXT NOT NULL,
+	role            TEXT NOT NULL DEFAULT 'player',
+	password_hash   TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS quiz_sessions (
@@ -65,5 +67,56 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("applying schema: %w", err)
 	}
 
+	if err := migrate(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	return db, nil
+}
+
+// migrate brings older databases up to date by adding columns that were
+// introduced after the initial schema. SQLite lacks ADD COLUMN IF NOT
+// EXISTS, so each column is checked before being added.
+func migrate(db *sql.DB) error {
+	for _, c := range []struct{ table, column, def string }{
+		{"players", "role", "TEXT NOT NULL DEFAULT 'player'"},
+		{"players", "password_hash", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		has, err := hasColumn(db, c.table, c.column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.Exec("ALTER TABLE " + c.table + " ADD COLUMN " + c.column + " " + c.def); err != nil {
+			return fmt.Errorf("migrating %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	return nil
+}
+
+// hasColumn reports whether a table already has a column.
+func hasColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, fmt.Errorf("inspecting %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dfltValue        sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

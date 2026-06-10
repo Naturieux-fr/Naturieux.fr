@@ -15,6 +15,7 @@ type SpeciesFilter struct {
 	HasPhotos   bool   // Only species with photos
 	Quality     string // Quality grade (research, needs_id, casual)
 	ExcludeIDs  []int  // Species IDs to exclude
+	Difficulty  string // Preferred photo difficulty (sources that support it)
 }
 
 // SpeciesRepository defines the interface for species data access.

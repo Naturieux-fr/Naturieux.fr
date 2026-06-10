@@ -132,7 +132,7 @@ func TestRepository_GetRandom_HasPhotosFiltersToOwned(t *testing.T) {
 	}
 
 	// Add a photo for the fox; now it is the only photo-bearing species
-	if err := repo.AddPhoto(ctx, 60585, "https://nat.example/fox.jpg", "(c) Moi", "cc-by"); err != nil {
+	if _, err := repo.AddPhoto(ctx, 60585, "https://nat.example/fox.jpg", "(c) Moi", "cc-by", ""); err != nil {
 		t.Fatalf("AddPhoto() error = %v", err)
 	}
 	got, err = repo.GetRandom(ctx, ports.SpeciesFilter{HasPhotos: true, Limit: 10})
@@ -156,11 +156,11 @@ func TestRepository_GetRandom_HasPhotos_NoDuplicateWithManyPhotos(t *testing.T) 
 
 	// The fox owns three photos; it must still appear at most once.
 	for i := 0; i < 3; i++ {
-		if err := repo.AddPhoto(ctx, 60585, "https://nat.example/fox.jpg", "(c) Moi", "cc-by"); err != nil {
+		if _, err := repo.AddPhoto(ctx, 60585, "https://nat.example/fox.jpg", "(c) Moi", "cc-by", ""); err != nil {
 			t.Fatalf("AddPhoto() error = %v", err)
 		}
 	}
-	if err := repo.AddPhoto(ctx, 60577, "https://nat.example/wolf.jpg", "(c) Moi", "cc-by"); err != nil {
+	if _, err := repo.AddPhoto(ctx, 60577, "https://nat.example/wolf.jpg", "(c) Moi", "cc-by", ""); err != nil {
 		t.Fatalf("AddPhoto() error = %v", err)
 	}
 
@@ -177,6 +177,67 @@ func TestRepository_GetRandom_HasPhotos_NoDuplicateWithManyPhotos(t *testing.T) 
 			t.Errorf("species %d returned more than once", sp.ID())
 		}
 		seen[sp.ID()] = true
+	}
+}
+
+func TestRepository_GetRandom_PrefersDifficultyWithFallback(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// Fox has a "beginner" photo, wolf an "expert" one.
+	if _, err := repo.AddPhoto(ctx, 60585, "u-fox", "(c) Moi", "cc-by", "beginner"); err != nil {
+		t.Fatalf("AddPhoto() error = %v", err)
+	}
+	if _, err := repo.AddPhoto(ctx, 60577, "u-wolf", "(c) Moi", "cc-by", "expert"); err != nil {
+		t.Fatalf("AddPhoto() error = %v", err)
+	}
+
+	// A beginner pick of 1 must select the fox (only beginner photo).
+	got, err := repo.GetRandom(ctx, ports.SpeciesFilter{HasPhotos: true, Difficulty: "beginner", Limit: 1})
+	if err != nil {
+		t.Fatalf("GetRandom() error = %v", err)
+	}
+	if len(got) != 1 || got[0].ID() != 60585 {
+		t.Fatalf("GetRandom(beginner) = %v, want only the fox", got)
+	}
+
+	// Asking for 2 at "beginner" must fall back to fill with the wolf.
+	got, err = repo.GetRandom(ctx, ports.SpeciesFilter{HasPhotos: true, Difficulty: "beginner", Limit: 2})
+	if err != nil {
+		t.Fatalf("GetRandom() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("GetRandom(beginner, limit 2) = %d species, want 2 (fallback fills)", len(got))
+	}
+}
+
+func TestRepository_ListAndDeletePhoto(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	id, err := repo.AddPhoto(ctx, 60585, "u-fox", "(c) Moi", "cc-by", "expert")
+	if err != nil {
+		t.Fatalf("AddPhoto() error = %v", err)
+	}
+
+	photos, err := repo.ListPhotos(ctx, 60585)
+	if err != nil {
+		t.Fatalf("ListPhotos() error = %v", err)
+	}
+	if len(photos) != 1 || photos[0].Difficulty != "expert" || photos[0].ID != id {
+		t.Fatalf("ListPhotos() = %+v, want one expert photo with id %d", photos, id)
+	}
+
+	// Adding a photo to an unknown taxon is rejected.
+	if _, err := repo.AddPhoto(ctx, 999999, "u", "", "", ""); !errors.Is(err, ports.ErrNotFound) {
+		t.Errorf("AddPhoto(unknown taxon) error = %v, want ErrNotFound", err)
+	}
+
+	if err := repo.DeletePhoto(ctx, id); err != nil {
+		t.Fatalf("DeletePhoto() error = %v", err)
+	}
+	if err := repo.DeletePhoto(ctx, id); !errors.Is(err, ports.ErrNotFound) {
+		t.Errorf("DeletePhoto(twice) error = %v, want ErrNotFound", err)
 	}
 }
 

@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS taxref_photos (
 	url         TEXT NOT NULL,
 	attribution TEXT NOT NULL DEFAULT '',
 	license     TEXT NOT NULL DEFAULT '',
+	difficulty  TEXT NOT NULL DEFAULT '',
 	FOREIGN KEY (cd_nom) REFERENCES taxref_species(cd_nom)
 );
 
@@ -53,10 +54,45 @@ CREATE TABLE IF NOT EXISTS taxref_meta (
 );
 `
 
-// EnsureSchema creates the TAXREF tables and indexes if they do not exist.
+// EnsureSchema creates the TAXREF tables and indexes if they do not exist,
+// and brings older databases up to date.
 func EnsureSchema(db *sql.DB) error {
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("applying taxref schema: %w", err)
 	}
+	// Add the per-photo difficulty column to databases created before it.
+	has, err := columnExists(db, "taxref_photos", "difficulty")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE taxref_photos ADD COLUMN difficulty TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrating taxref_photos.difficulty: %w", err)
+		}
+	}
 	return nil
+}
+
+// columnExists reports whether a table already has a column.
+func columnExists(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, fmt.Errorf("inspecting %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dflt             sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

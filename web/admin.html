@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naturieux — Administration</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.3">
+    <link rel="stylesheet" href="/static/css/admin.css?v=1.0">
+    <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
+</head>
+<body>
+    <div class="admin" x-data="adminApp()" x-init="init()">
+
+        <!-- Login -->
+        <div class="admin-login" x-show="!token">
+            <div class="logo"><span class="logo-icon">🌿</span><h1>Administration</h1></div>
+            <p class="account-hint">Connexion réservée aux administrateurs</p>
+            <input type="text" class="account-input" x-model="login.username" placeholder="Identifiant" @keyup.enter="doLogin()">
+            <input type="password" class="account-input" x-model="login.password" placeholder="Mot de passe" @keyup.enter="doLogin()">
+            <button @click="doLogin()" class="primary-btn" :disabled="busy">Se connecter</button>
+            <p class="admin-error" x-show="error" x-text="error"></p>
+        </div>
+
+        <!-- Console -->
+        <div class="admin-console" x-show="token">
+            <header class="admin-header">
+                <div class="logo"><span class="logo-icon">🌿</span><h1>Gestion des photos</h1></div>
+                <button @click="logout()" class="secondary-btn admin-logout">Déconnexion</button>
+            </header>
+
+            <p class="admin-error" x-show="error" x-text="error"></p>
+
+            <!-- Recherche d'un taxon -->
+            <section class="admin-card">
+                <h2>1. Chercher une espèce</h2>
+                <input type="text" class="account-input" x-model="search.query"
+                       placeholder="Nom scientifique ou français (ex. Vulpes, Renard)"
+                       @keyup.enter="doSearch()">
+                <button @click="doSearch()" class="secondary-btn" :disabled="busy">Rechercher</button>
+
+                <ul class="taxa-list" x-show="search.results.length">
+                    <template x-for="t in search.results" :key="t.cd_nom">
+                        <li class="taxa-item" :class="{ 'selected': selected && selected.cd_nom === t.cd_nom }"
+                            @click="select(t)">
+                            <div>
+                                <span class="taxa-sci" x-text="t.scientific_name"></span>
+                                <span class="taxa-vern" x-text="t.vernacular_name"></span>
+                            </div>
+                            <span class="taxa-cdnom" x-text="'cd_nom ' + t.cd_nom"></span>
+                        </li>
+                    </template>
+                </ul>
+            </section>
+
+            <!-- Gestion des photos du taxon sélectionné -->
+            <section class="admin-card" x-show="selected">
+                <h2>2. Photos de
+                    <span x-text="selected ? selected.scientific_name : ''"></span>
+                    <span class="taxa-cdnom" x-text="selected ? '(cd_nom ' + selected.cd_nom + ')' : ''"></span>
+                </h2>
+
+                <table class="photos-table" x-show="photos.length">
+                    <thead><tr><th>Aperçu</th><th>URL</th><th>Difficulté</th><th></th></tr></thead>
+                    <tbody>
+                        <template x-for="p in photos" :key="p.id">
+                            <tr>
+                                <td><img class="photo-thumb" :src="p.url" alt="" loading="lazy"></td>
+                                <td class="photo-url" x-text="p.url"></td>
+                                <td x-text="p.difficulty || '—'"></td>
+                                <td><button class="danger-btn" @click="removePhoto(p.id)">Supprimer</button></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <p class="account-hint" x-show="!photos.length">Aucune photo pour cette espèce.</p>
+
+                <h3>Ajouter une photo</h3>
+                <div class="photo-form">
+                    <input type="url" class="account-input" x-model="form.url" placeholder="URL de la photo">
+                    <input type="text" class="account-input" x-model="form.attribution" placeholder="Attribution (auteur, licence)">
+                    <input type="text" class="account-input" x-model="form.license" placeholder="Code licence (ex. cc-by)">
+                    <select class="account-input" x-model="form.difficulty">
+                        <option value="">Difficulté (optionnel)</option>
+                        <option value="beginner">Débutant</option>
+                        <option value="intermediate">Intermédiaire</option>
+                        <option value="expert">Expert</option>
+                        <option value="master">Maître</option>
+                    </select>
+                    <button @click="addPhoto()" class="primary-btn" :disabled="busy">Ajouter</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/js/admin.js?v=1.0"></script>
+</body>
+</html>

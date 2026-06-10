@@ -63,12 +63,15 @@ func (f *questionFactory) CreateQuestion(
 ) (*quiz.Question, error) {
 	config := quiz.DefaultDifficultyConfigs()[difficulty]
 
-	// Get random species for the correct answer
+	// Get random species for the correct answer. The difficulty is passed
+	// through so sources that tag photos by difficulty (TAXREF) can prefer
+	// a photo matching the session level.
 	filter := ports.SpeciesFilter{
 		IconicTaxon: f.taxonFilter,
 		PlaceID:     f.placeID,
 		Limit:       1,
 		HasPhotos:   true,
+		Difficulty:  string(difficulty),
 	}
 
 	correctSpecies, err := f.speciesRepo.GetRandom(ctx, filter)

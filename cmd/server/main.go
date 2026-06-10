@@ -3,7 +3,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +19,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/mock"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
+	adminapp "github.com/Naturieux-fr/Naturieux.fr/internal/application/admin"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
@@ -89,9 +92,21 @@ func main() {
 	// Create HTTP handler
 	handler := httphandler.NewHandler(quizService, devMode)
 
+	// Admin back-office: auth + photo management (photos only when TAXREF)
+	authService := adminapp.NewService(playerRepo, authSecret())
+	seedAdminFromEnv(authService)
+	taxrefRepo, _ := speciesRepo.(*taxref.Repository) // nil unless SPECIES_SOURCE=taxref
+	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo)
+
 	// Create HTTP server
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
+	adminHandler.RegisterRoutes(mux)
+
+	// Serve the admin page
+	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/admin.html")
+	})
 
 	// Serve static files
 	staticFS := http.FileServer(http.Dir("web/static"))
@@ -203,6 +218,34 @@ func buildSpeciesRepo(ctx context.Context, db *sql.DB, devMode bool) (ports.Spec
 		go speciesCache.StartAutoWarm(ctx, cache.DefaultWarmInterval, cache.WarmTaxa, cache.DefaultWarmTarget)
 		return speciesCache, nil
 	}
+}
+
+// authSecret returns the token-signing secret from AUTH_SECRET, or a random
+// one (admin sessions then reset on restart, which is acceptable).
+func authSecret() string {
+	if s := os.Getenv("AUTH_SECRET"); s != "" {
+		return s
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		log.Fatalf("generating auth secret: %v", err)
+	}
+	log.Println("⚠️  AUTH_SECRET not set — using a random secret (admin sessions reset on restart)")
+	return hex.EncodeToString(buf)
+}
+
+// seedAdminFromEnv creates/updates the admin account when ADMIN_USERNAME and
+// ADMIN_PASSWORD are set.
+func seedAdminFromEnv(svc *adminapp.Service) {
+	user, pass := os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD")
+	if user == "" || pass == "" {
+		log.Println("ℹ️  ADMIN_USERNAME/ADMIN_PASSWORD not set — no admin account seeded")
+		return
+	}
+	if err := svc.SeedAdmin(context.Background(), user, pass); err != nil {
+		log.Fatalf("seeding admin: %v", err)
+	}
+	log.Printf("Admin account ready: %s", user)
 }
 
 // ensureDemoPlayer creates the demo player if it does not exist yet.
