@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/mock"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
@@ -52,21 +54,13 @@ func main() {
 	backgroundCtx, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
 
-	// Initialize species repository based on mode
-	var speciesRepo ports.SpeciesRepository
-	if devMode {
-		log.Println("🔧 DEV MODE ENABLED - Using mock data")
-		speciesRepo = mock.NewSpeciesRepository()
-	} else {
-		log.Println("🌿 Production mode - Using iNaturalist API with local cache")
-		speciesCache, err := cache.New(db, inaturalist.NewClient(),
-			cache.WithPlaceID(francePlaceID))
-		if err != nil {
-			log.Fatalf("Failed to initialize species cache: %v", err)
-		}
-		go speciesCache.StartAutoWarm(backgroundCtx, cache.DefaultWarmInterval,
-			cache.WarmTaxa, cache.DefaultWarmTarget)
-		speciesRepo = speciesCache
+	// Initialize the species repository. SPECIES_SOURCE selects the backend:
+	//   mock    - in-memory sample data (also enabled by DEV_MODE)
+	//   taxref  - local TAXREF reference + our own photo collection
+	//   inat    - iNaturalist API with a local cache (default)
+	speciesRepo, err := buildSpeciesRepo(backgroundCtx, db, devMode)
+	if err != nil {
+		log.Fatalf("Failed to initialize species source: %v", err)
 	}
 
 	playerRepo := sqlite.NewPlayerRepository(db)
@@ -168,6 +162,47 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// buildSpeciesRepo selects and constructs the species data source from
+// the DEV_MODE and SPECIES_SOURCE environment variables.
+func buildSpeciesRepo(ctx context.Context, db *sql.DB, devMode bool) (ports.SpeciesRepository, error) {
+	source := os.Getenv("SPECIES_SOURCE")
+	if devMode && source == "" {
+		source = "mock"
+	}
+
+	switch source {
+	case "mock":
+		log.Println("🔧 Species source: mock data")
+		return mock.NewSpeciesRepository(), nil
+
+	case "taxref":
+		log.Println("🇫🇷 Species source: local TAXREF + owned photos")
+		if err := taxref.EnsureSchema(db); err != nil {
+			return nil, err
+		}
+		repo := taxref.NewRepository(db)
+		count, err := repo.CountSpecies(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			log.Println("⚠️  TAXREF is empty — import it with: go run ./cmd/importtaxref -file taxon.txt")
+		} else {
+			log.Printf("TAXREF loaded: %d species (version %q)", count, repo.Version(ctx))
+		}
+		return repo, nil
+
+	default:
+		log.Println("🌿 Species source: iNaturalist API with local cache")
+		speciesCache, err := cache.New(db, inaturalist.NewClient(), cache.WithPlaceID(francePlaceID))
+		if err != nil {
+			return nil, err
+		}
+		go speciesCache.StartAutoWarm(ctx, cache.DefaultWarmInterval, cache.WarmTaxa, cache.DefaultWarmTarget)
+		return speciesCache, nil
+	}
 }
 
 // ensureDemoPlayer creates the demo player if it does not exist yet.
