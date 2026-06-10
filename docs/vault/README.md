@@ -10,6 +10,7 @@ Base de connaissances du projet. Chaque note est autonome et reliée aux autres.
 | [02 — Reste à faire](02-reste-a-faire.md) | Roadmap priorisée des fonctionnalités et dettes techniques |
 | [03 — Faisabilité](03-faisabilite.md) | Étude de faisabilité : API iNaturalist, licences, quotas, alternatives |
 | [04 — Normes de code](04-normes-de-code.md) | Conventions Go, architecture, qualité, workflow git |
+| [05 — TAXREF & photos](05-taxref-et-photos.md) | Référentiel TAXREF (source, structure, licence), stratégie photos, choix relationnel vs graphe |
 
 ## Documentation technique existante
 
