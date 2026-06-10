@@ -150,6 +150,36 @@ func TestRepository_GetRandom_HasPhotosFiltersToOwned(t *testing.T) {
 	}
 }
 
+func TestRepository_GetRandom_HasPhotos_NoDuplicateWithManyPhotos(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// The fox owns three photos; it must still appear at most once.
+	for i := 0; i < 3; i++ {
+		if err := repo.AddPhoto(ctx, 60585, "https://nat.example/fox.jpg", "(c) Moi", "cc-by"); err != nil {
+			t.Fatalf("AddPhoto() error = %v", err)
+		}
+	}
+	if err := repo.AddPhoto(ctx, 60577, "https://nat.example/wolf.jpg", "(c) Moi", "cc-by"); err != nil {
+		t.Fatalf("AddPhoto() error = %v", err)
+	}
+
+	got, err := repo.GetRandom(ctx, ports.SpeciesFilter{HasPhotos: true, Limit: 10})
+	if err != nil {
+		t.Fatalf("GetRandom() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("GetRandom(HasPhotos) = %d species, want 2 distinct (fox + wolf)", len(got))
+	}
+	seen := map[int]bool{}
+	for _, sp := range got {
+		if seen[sp.ID()] {
+			t.Errorf("species %d returned more than once", sp.ID())
+		}
+		seen[sp.ID()] = true
+	}
+}
+
 func TestRepository_GetRandom_ExcludeIDs(t *testing.T) {
 	repo := newTestRepo(t)
 
