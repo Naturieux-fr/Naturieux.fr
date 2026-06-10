@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS taxref_species (
 );
 
 CREATE INDEX IF NOT EXISTS idx_taxref_class  ON taxref_species(class);
+CREATE INDEX IF NOT EXISTS idx_taxref_ordre  ON taxref_species(ordre);
 CREATE INDEX IF NOT EXISTS idx_taxref_family ON taxref_species(family);
 CREATE INDEX IF NOT EXISTS idx_taxref_genus  ON taxref_species(genus);
 

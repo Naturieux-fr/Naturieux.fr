@@ -130,13 +130,15 @@ func (r *Repository) GetRandom(ctx context.Context, filter ports.SpeciesFilter) 
 	return speciesList, nil
 }
 
-// GetSimilar returns species taxonomically close to the given one (same genus
-// first, then same family) to serve as plausible distractors. Distractors
-// only need a name, so photos are not required here.
+// GetSimilar returns species taxonomically close to the given one, ranked by
+// proximity (same genus, then same family, then same order) so the quiz can
+// build hard, plausible distractors. Closeness is read straight from the
+// denormalized rank columns — no tree traversal. Distractors only need a
+// name, so photos are not required here.
 func (r *Repository) GetSimilar(ctx context.Context, speciesID int, limit int) ([]*species.Species, error) {
-	var genus, family string
+	var genus, family, ordre string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT genus, family FROM taxref_species WHERE cd_nom = ?`, speciesID).Scan(&genus, &family)
+		`SELECT genus, family, ordre FROM taxref_species WHERE cd_nom = ?`, speciesID).Scan(&genus, &family, &ordre)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ports.ErrNotFound
 	}
@@ -144,37 +146,33 @@ func (r *Repository) GetSimilar(ctx context.Context, speciesID int, limit int) (
 		return nil, fmt.Errorf("taxref get similar: %w", err)
 	}
 
-	// Prefer same genus, fall back to same family to reach the limit.
-	result := make([]*species.Species, 0, limit)
-	seen := map[int]bool{speciesID: true}
+	// Single query: candidates sharing the genus, family or order, ordered
+	// closest-first and randomized within each proximity tier. Empty rank
+	// values can never match a real row, so they are harmless.
+	return r.querySpecies(ctx, `
+		SELECT cd_nom, scientific_name, vernacular_name, class, kingdom
+		FROM taxref_species
+		WHERE cd_nom != ?
+		  AND (genus = ? OR family = ? OR ordre = ?)
+		ORDER BY
+			CASE
+				WHEN genus = ?  THEN 1
+				WHEN family = ? THEN 2
+				ELSE 3
+			END,
+			RANDOM()
+		LIMIT ?`,
+		speciesID, nonEmpty(genus), nonEmpty(family), nonEmpty(ordre),
+		nonEmpty(genus), nonEmpty(family), limit)
+}
 
-	for _, clause := range []struct {
-		column string
-		value  string
-	}{{"genus", genus}, {"family", family}} {
-		if clause.value == "" || len(result) >= limit {
-			continue
-		}
-		batch, err := r.querySpecies(ctx, `
-			SELECT cd_nom, scientific_name, vernacular_name, class, kingdom
-			FROM taxref_species
-			WHERE `+clause.column+` = ? AND cd_nom != ?
-			ORDER BY RANDOM() LIMIT ?`, clause.value, speciesID, limit*2)
-		if err != nil {
-			return nil, err
-		}
-		for _, sp := range batch {
-			if seen[sp.ID()] {
-				continue
-			}
-			seen[sp.ID()] = true
-			result = append(result, sp)
-			if len(result) >= limit {
-				break
-			}
-		}
+// nonEmpty maps an empty rank to a sentinel that cannot match any real row,
+// so an absent genus/family/order simply contributes no candidates.
+func nonEmpty(s string) string {
+	if s == "" {
+		return "\x00"
 	}
-	return result, nil
+	return s
 }
 
 // Search finds species whose scientific or vernacular name matches the query.

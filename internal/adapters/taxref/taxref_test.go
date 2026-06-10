@@ -216,6 +216,34 @@ func TestRepository_GetSimilar_PrefersGenusThenFamily(t *testing.T) {
 	}
 }
 
+func TestRepository_GetSimilar_RanksByProximity(t *testing.T) {
+	repo := newTestRepo(t)
+
+	// For Vulpes vulpes (60585): Canis lupus shares the family (Canidae),
+	// while Meles meles only shares the order (Carnivora, Mustelidae). The
+	// family match must rank before the order-only match.
+	similar, err := repo.GetSimilar(context.Background(), 60585, 5)
+	if err != nil {
+		t.Fatalf("GetSimilar() error = %v", err)
+	}
+
+	posCanis, posMeles := -1, -1
+	for i, sp := range similar {
+		switch sp.ID() {
+		case 60577:
+			posCanis = i
+		case 60596:
+			posMeles = i
+		}
+	}
+	if posCanis == -1 {
+		t.Fatal("same-family species (Canis lupus) missing from distractors")
+	}
+	if posMeles != -1 && posCanis > posMeles {
+		t.Errorf("same-family Canis (pos %d) should rank before same-order Meles (pos %d)", posCanis, posMeles)
+	}
+}
+
 func TestRepository_Search(t *testing.T) {
 	repo := newTestRepo(t)
 
