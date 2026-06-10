@@ -477,6 +477,36 @@ func protectedImageURL(sessionID string, q *quiz.Question) string {
 	return "/api/v1/quiz/" + sessionID + "/image?n=" + url.QueryEscape(q.ID())
 }
 
+// HandleGuess checks a free-text guess against the current question without
+// advancing it. A wrong guess reveals nothing; a correct guess returns the
+// species id so the client can record the answer through the normal flow.
+func (h *Handler) HandleGuess(w http.ResponseWriter, r *http.Request) {
+	session, err := h.quizService.GetSession(r.Context(), r.PathValue("session_id"))
+	if err != nil {
+		writeSessionError(w, err)
+		return
+	}
+	q := session.CurrentQuestion()
+	if q == nil {
+		writeError(w, http.StatusConflict, "no current question")
+		return
+	}
+
+	var req struct {
+		Guess string `json:"guess"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if q.CorrectSpecies().MatchesName(req.Guess) {
+		writeSuccess(w, map[string]interface{}{"correct": true, "species_id": q.CorrectSpecies().ID()})
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"correct": false})
+}
+
 // HandleQuizImage streams the current question's image without exposing the
 // underlying file or species URL. It only serves while the session is in
 // progress, and only the current question, so the response cannot be replayed
@@ -557,4 +587,5 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/quiz/answer", h.HandleSubmitAnswer)
 	mux.HandleFunc("/api/v1/quiz/abandon", h.HandleAbandonSession)
 	mux.HandleFunc("GET /api/v1/quiz/{session_id}/image", h.HandleQuizImage)
+	mux.HandleFunc("POST /api/v1/quiz/{session_id}/guess", h.HandleGuess)
 }

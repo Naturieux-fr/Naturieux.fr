@@ -32,8 +32,20 @@ function quizApp() {
         settings: {
             difficulty: 'beginner',
             taxon: '',
-            questionCount: 10
+            questionCount: 10,
+            epreuve: 'image',     // image | flash | silhouette | partial
+            answerMode: 'choices' // choices | free
         },
+
+        // Quiz-mode runtime state
+        quizType: 'image',
+        flashHidden: false,
+        flashTimeout: null,
+        partialStyle: '',
+        guess: '',
+        attemptsLeft: 3,
+        maxAttempts: 3,
+        guessHint: '',
 
         // Quiz state
         sessionId: '',
@@ -84,6 +96,18 @@ function quizApp() {
             { id: 'Fungi', name: 'Champignons', svg: '<svg viewBox="0 0 24 24"><path d="M4 11c0-4 3.6-6 8-6s8 2 8 6c0 1-7 1.6-8 1.6S4 12 4 11Z"/><path d="M10 12.5c0 4 .5 6-1 8M14 12.5c0 4-.5 6 1 8"/></svg>' }
         ],
 
+        epreuves: [
+            { id: 'image', name: 'Planche', desc: 'image entière' },
+            { id: 'flash', name: 'Éclair', desc: 'un bref instant' },
+            { id: 'silhouette', name: 'Silhouette', desc: 'forme sombre' },
+            { id: 'partial', name: 'Détail', desc: 'gros plan' }
+        ],
+
+        answerModes: [
+            { id: 'choices', name: 'Suggestions', desc: 'liste de noms' },
+            { id: 'free', name: 'Réponse libre', desc: '3 essais' }
+        ],
+
         // Initialize
         init() {
             this.loadPlayer();
@@ -112,6 +136,18 @@ function quizApp() {
                 this.startTime = Date.now();
                 this.startTimer();
             }
+            // Flash mode: reveal the image only for a brief moment.
+            if (this.quizType === 'flash') {
+                this.flashHidden = false;
+                this.flashTimeout = setTimeout(() => { this.flashHidden = true; }, this.flashDurationMs);
+            }
+        },
+
+        // A stable random crop for the "Détail" (partial) mode.
+        randomPartialStyle() {
+            const tx = Math.round((Math.random() * 50 - 25));
+            const ty = Math.round((Math.random() * 50 - 25));
+            return `transform: scale(2.7) translate(${tx}%, ${ty}%);`;
         },
 
         // Called when quiz image fails to load
@@ -242,7 +278,7 @@ function quizApp() {
                 const data = await this.api('/quiz/start', 'POST', {
                     user_id: this.player.id,
                     difficulty: this.settings.difficulty,
-                    quiz_types: ['image'],
+                    quiz_types: [this.settings.epreuve],
                     taxon_filter: this.settings.taxon,
                     question_count: this.settings.questionCount
                 });
@@ -286,6 +322,18 @@ function quizApp() {
             this.showFeedback = false;
             this.timer = this.timeLimit;
 
+            // Per-mode setup
+            this.quizType = q.quiz_type || 'image';
+            this.flashDurationMs = q.flash_duration_ms || 2500;
+            this.flashHidden = false;
+            if (this.flashTimeout) { clearTimeout(this.flashTimeout); this.flashTimeout = null; }
+            this.partialStyle = this.quizType === 'partial' ? this.randomPartialStyle() : '';
+
+            // Free-answer mode
+            this.guess = '';
+            this.guessHint = '';
+            this.attemptsLeft = this.maxAttempts;
+
             if (this._imageObjectUrl) {
                 URL.revokeObjectURL(this._imageObjectUrl);
                 this._imageObjectUrl = '';
@@ -325,6 +373,28 @@ function quizApp() {
             this.stopTimer();
             if (!this.showFeedback) {
                 this.submitAnswer(null);
+            }
+        },
+
+        // Free-answer mode: check a typed guess. Correct → record it; wrong →
+        // consume an attempt, and on the last one reveal the answer.
+        async submitGuess() {
+            if (this.showFeedback || !this.guess.trim()) return;
+            try {
+                const data = await this.api(`/quiz/${this.sessionId}/guess`, 'POST', { guess: this.guess });
+                if (data.correct) {
+                    this.submitAnswer(data.species_id);
+                    return;
+                }
+                this.attemptsLeft--;
+                if (this.attemptsLeft <= 0) {
+                    this.submitAnswer(0); // out of attempts: reveal + advance
+                } else {
+                    this.guessHint = `Pas tout à fait — ${this.attemptsLeft} essai${this.attemptsLeft > 1 ? 's' : ''} restant${this.attemptsLeft > 1 ? 's' : ''}`;
+                    this.guess = '';
+                }
+            } catch (e) {
+                this.error = e.message;
             }
         },
 

@@ -3,6 +3,12 @@ package species
 
 import (
 	"errors"
+	"strings"
+	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 // IconicTaxon represents the major taxonomic groups.
@@ -91,6 +97,52 @@ func (s *Species) DisplayName() string {
 		return s.commonName
 	}
 	return s.scientificName
+}
+
+// MatchesName reports whether a free-text guess identifies this species. The
+// comparison is tolerant of case, accents, surrounding articles and partial
+// names (e.g. "renard" matches "Renard roux", "vulpes vulpes" matches the
+// scientific name).
+func (s *Species) MatchesName(guess string) bool {
+	g := normalizeName(guess)
+	if len(g) < 3 {
+		return false
+	}
+	for _, candidate := range []string{s.scientificName, s.commonName} {
+		c := normalizeName(candidate)
+		if c == "" {
+			continue
+		}
+		if c == g || strings.Contains(c, g) || strings.Contains(g, c) {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeName lowercases, strips accents and parentheticals, and keeps only
+// letters and single spaces.
+func normalizeName(s string) string {
+	// Remove combining marks (accents).
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	folded, _, err := transform.String(t, s)
+	if err != nil {
+		folded = s
+	}
+
+	var b strings.Builder
+	prevSpace := false
+	for _, r := range strings.ToLower(folded) {
+		switch {
+		case unicode.IsLetter(r):
+			b.WriteRune(r)
+			prevSpace = false
+		case (r == ' ' || r == '-' || r == '\'') && !prevSpace:
+			b.WriteByte(' ')
+			prevSpace = true
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // Photos returns all photos for this species.

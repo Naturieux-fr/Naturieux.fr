@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.3">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -103,6 +103,32 @@
                     </div>
 
                     <div class="form-block">
+                        <label class="form-legend">Type d'épreuve</label>
+                        <div class="grade-grid">
+                            <template x-for="ep in epreuves" :key="ep.id">
+                                <button class="grade-chip slim" :class="{ active: settings.epreuve === ep.id }"
+                                        @click="settings.epreuve = ep.id">
+                                    <span class="chip-name" x-text="ep.name"></span>
+                                    <span class="chip-desc" x-text="ep.desc"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="form-block">
+                        <label class="form-legend">Réponse</label>
+                        <div class="grade-grid">
+                            <template x-for="am in answerModes" :key="am.id">
+                                <button class="grade-chip slim" :class="{ active: settings.answerMode === am.id }"
+                                        @click="settings.answerMode = am.id">
+                                    <span class="chip-name" x-text="am.name"></span>
+                                    <span class="chip-desc" x-text="am.desc"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="form-block">
                         <label class="form-legend">Nombre de planches</label>
                         <div class="count-row">
                             <template x-for="count in [5, 10, 15, 20]" :key="count">
@@ -153,11 +179,16 @@
                 <figure class="mount">
                     <span class="corner tl"></span><span class="corner tr"></span>
                     <span class="corner bl"></span><span class="corner br"></span>
-                    <div class="mount-frame">
+                    <div class="mount-frame" :class="'mode-' + quizType">
                         <img :src="question.mediaUrl || null" alt="Spécimen à identifier"
-                             x-show="question.mediaUrl" @load="onImageLoad()" @error="onImageError()"
+                             x-show="question.mediaUrl && !(quizType === 'flash' && flashHidden)"
+                             @load="onImageLoad()" @error="onImageError()"
                              @contextmenu.prevent @dragstart.prevent draggable="false"
-                             :class="{ loaded: imageLoaded }">
+                             :class="{ loaded: imageLoaded }"
+                             :style="quizType === 'partial' ? partialStyle : ''">
+                        <div class="flash-cover" x-show="quizType === 'flash' && flashHidden && imageLoaded">
+                            <span>✦</span><p>De mémoire…</p>
+                        </div>
                         <div class="mount-loading" x-show="!imageLoaded">
                             <div class="spinner big"></div>
                             <p x-show="timerPaused">Développement de la plaque…</p>
@@ -167,7 +198,9 @@
                 </figure>
 
                 <p class="determine">Quelle est cette espèce ?</p>
-                <div class="key-list">
+
+                <!-- Réponse à choix -->
+                <div class="key-list" x-show="settings.answerMode === 'choices'">
                     <template x-for="(choice, i) in question.choices" :key="choice.species_id">
                         <button class="key-entry"
                                 :class="{
@@ -181,6 +214,23 @@
                             <span class="key-name" x-text="choice.display_name"></span>
                         </button>
                     </template>
+                </div>
+
+                <!-- Réponse libre -->
+                <div class="free-answer" x-show="settings.answerMode === 'free'">
+                    <div class="free-row">
+                        <input type="text" class="ink-field" x-model="guess"
+                               placeholder="Nom de l'espèce…" :disabled="showFeedback"
+                               @keyup.enter="submitGuess()">
+                        <button class="btn btn-solid" @click="submitGuess()" :disabled="showFeedback || !guess.trim()">Proposer</button>
+                    </div>
+                    <div class="attempts">
+                        <template x-for="i in maxAttempts" :key="i">
+                            <span class="pip" :class="{ spent: i > attemptsLeft }"></span>
+                        </template>
+                        <span class="attempts-label" x-text="`${attemptsLeft} / ${maxAttempts} essais`"></span>
+                    </div>
+                    <p class="free-hint" x-show="guessHint" x-text="guessHint"></p>
                 </div>
             </div>
 
@@ -276,6 +326,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=2.2"></script>
+    <script src="/static/js/app.js?v=2.3"></script>
 </body>
 </html>

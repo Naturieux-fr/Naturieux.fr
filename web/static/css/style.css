@@ -283,6 +283,32 @@ body {
     -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none;
 }
 .mount-frame img.loaded { opacity: 1; }
+
+/* Quiz visual modes */
+.mount-frame.mode-silhouette img { filter: grayscale(1) brightness(.42) contrast(2.1); }
+.mount-frame.mode-partial { overflow: hidden; }
+.mount-frame.mode-partial img { transition: opacity .6s ease; }
+.flash-cover {
+    position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 6px;
+    background:
+        repeating-linear-gradient(45deg, var(--forest) 0 14px, var(--forest-2) 14px 28px);
+    color: var(--paper-3); text-align: center;
+}
+.flash-cover span { font-size: 1.6rem; color: var(--ochre); }
+.flash-cover p { font-family: var(--serif); font-style: italic; }
+
+/* Free-answer mode */
+.free-answer { width: 100%; max-width: 520px; }
+.free-row { display: flex; gap: 12px; }
+.free-row .ink-field { flex: 1; }
+.attempts { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.pip { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--rust); background: var(--rust); }
+.pip.spent { background: transparent; opacity: .4; }
+.attempts-label { margin-left: 6px; font-size: .78rem; color: var(--ink-3); }
+.free-hint { margin-top: 10px; font-family: var(--serif); font-style: italic; color: var(--rust); }
+
+/* Slim grade chips (épreuve / réponse selectors) */
+.grade-chip.slim { grid-template-columns: 1fr; gap: 2px; }
 .mount-loading { position: absolute; inset: 0; display: grid; place-items: center; gap: 10px; align-content: center; color: var(--ink-3); font-style: italic; font-family: var(--serif); }
 .mount-caption { margin-top: 10px; text-align: right; font-style: italic; font-family: var(--serif); font-size: .76rem; color: var(--ink-3); }
 
