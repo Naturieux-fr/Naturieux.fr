@@ -13,15 +13,20 @@ function quizApp() {
         // Dev mode
         devMode: false,
 
-        // Player
+        // Player account (server-side; id kept in localStorage)
         player: {
-            id: 'demo',
-            name: 'Joueur',
+            id: '',
+            name: '',
             level: 1,
             xp: 0,
             xpNext: 100,
-            xpPercent: 0
+            xpPercent: 0,
+            totalXp: 0,
+            totalGames: 0,
+            bestStreak: 0
         },
+        usernameInput: '',
+        registering: false,
 
         // Settings
         settings: {
@@ -119,23 +124,72 @@ function quizApp() {
             }
         },
 
-        // Load player from localStorage
-        loadPlayer() {
-            const saved = localStorage.getItem('naturieux_player');
-            if (saved) {
-                try {
-                    const data = JSON.parse(saved);
-                    this.player = { ...this.player, ...data };
-                    this.updateXpPercent();
-                } catch (e) {
-                    console.error('Error loading player:', e);
+        // Load the saved account and refresh the profile from the server
+        async loadPlayer() {
+            const saved = localStorage.getItem('naturieux_account');
+            if (!saved) {
+                return;
+            }
+            try {
+                const account = JSON.parse(saved);
+                if (account.id) {
+                    await this.fetchPlayer(account.id);
                 }
+            } catch (e) {
+                console.error('Error loading account:', e);
             }
         },
 
-        // Save player to localStorage
-        savePlayer() {
-            localStorage.setItem('naturieux_player', JSON.stringify(this.player));
+        // Fetch the player profile from the server
+        async fetchPlayer(id) {
+            try {
+                const data = await this.api(`/players/${id}`, 'GET');
+                this.applyPlayer(data);
+            } catch (e) {
+                // Unknown account (e.g. wiped database): ask for a new pseudo
+                console.error('Fetch player error:', e);
+                localStorage.removeItem('naturieux_account');
+                this.player.id = '';
+            }
+        },
+
+        // Map a server player profile onto the local state
+        applyPlayer(data) {
+            this.player.id = data.id;
+            this.player.name = data.username;
+            this.player.level = data.level;
+            this.player.xp = data.xp_in_level;
+            this.player.xpNext = data.xp_for_level;
+            this.player.totalXp = data.total_xp;
+            this.player.totalGames = data.total_games;
+            this.player.bestStreak = data.best_streak;
+            this.updateXpPercent();
+        },
+
+        // Create the account from the chosen pseudo
+        async createAccount() {
+            const username = this.usernameInput.trim();
+            if (username.length < 2) {
+                this.error = 'Le pseudo doit faire au moins 2 caracteres';
+                return;
+            }
+
+            this.registering = true;
+            this.error = '';
+            try {
+                const data = await this.api('/players', 'POST', { username });
+                this.applyPlayer(data);
+                localStorage.setItem('naturieux_account', JSON.stringify({
+                    id: data.id,
+                    username: data.username
+                }));
+            } catch (e) {
+                this.error = e.message === 'username already taken'
+                    ? 'Ce pseudo est deja pris'
+                    : e.message;
+            } finally {
+                this.registering = false;
+            }
         },
 
         // Update XP percentage
@@ -316,25 +370,15 @@ function quizApp() {
         showResults() {
             this.stopTimer();
 
-            // Calculate XP gained
-            this.xpGained = Math.round(this.score * 0.1) + (this.correctCount * 10);
-
-            // Update player
-            this.player.xp += this.xpGained;
-            this.checkLevelUp();
-            this.savePlayer();
+            // The server is the source of truth for XP: refresh the
+            // profile and display the difference
+            const previousXp = this.player.totalXp;
+            this.xpGained = 0;
+            this.fetchPlayer(this.player.id).then(() => {
+                this.xpGained = Math.max(0, this.player.totalXp - previousXp);
+            });
 
             this.screen = 'results';
-        },
-
-        // Check level up
-        checkLevelUp() {
-            while (this.player.xp >= this.player.xpNext) {
-                this.player.xp -= this.player.xpNext;
-                this.player.level++;
-                this.player.xpNext = Math.round(this.player.xpNext * 1.5);
-            }
-            this.updateXpPercent();
         },
 
         // Get trophy based on accuracy

@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
@@ -325,6 +329,44 @@ func (s *Service) GetLeaderboard(ctx context.Context, limit int) ([]*gamificatio
 		return nil, errors.New("player repository not configured")
 	}
 	return s.playerRepo.GetLeaderboard(ctx, limit)
+}
+
+// Username length bounds for player registration.
+const (
+	minUsernameLen = 2
+	maxUsernameLen = 20
+)
+
+// ErrInvalidUsername is returned when a registration username is rejected.
+var ErrInvalidUsername = fmt.Errorf("username must be %d to %d characters", minUsernameLen, maxUsernameLen)
+
+// RegisterPlayer creates a new player with the given username.
+func (s *Service) RegisterPlayer(ctx context.Context, username string) (*gamification.Player, error) {
+	if s.playerRepo == nil {
+		return nil, errors.New("player repository not configured")
+	}
+
+	username = strings.TrimSpace(username)
+	if n := utf8.RuneCountInString(username); n < minUsernameLen || n > maxUsernameLen {
+		return nil, ErrInvalidUsername
+	}
+
+	player, err := gamification.NewPlayer(uuid.New().String(), username)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.playerRepo.Create(ctx, player); err != nil {
+		return nil, err
+	}
+	return player, nil
+}
+
+// GetPlayer retrieves a player by ID.
+func (s *Service) GetPlayer(ctx context.Context, id string) (*gamification.Player, error) {
+	if s.playerRepo == nil {
+		return nil, ports.ErrNotFound
+	}
+	return s.playerRepo.GetByID(ctx, id)
 }
 
 // AbandonSession marks a session as abandoned.

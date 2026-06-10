@@ -224,6 +224,125 @@ func TestHandler_HandleSubmitAnswer_InvalidJSON(t *testing.T) {
 	}
 }
 
+// newPlayerTestHandler builds a handler with a real SQLite player repository.
+func newPlayerTestHandler(t *testing.T) *httphandler.Handler {
+	t.Helper()
+	db, err := sqlite.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("sqlite.Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	service := appquiz.NewService(nil, nil, sqlite.NewPlayerRepository(db), nil)
+	return httphandler.NewHandler(service, false)
+}
+
+func decodePlayer(t *testing.T, rec *httptest.ResponseRecorder) httphandler.PlayerDTO {
+	t.Helper()
+	var response struct {
+		Data httphandler.PlayerDTO `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	return response.Data
+}
+
+func TestHandler_HandleRegisterPlayer(t *testing.T) {
+	handler := newPlayerTestHandler(t)
+
+	body, _ := json.Marshal(map[string]string{"username": "alice"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/players", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleRegisterPlayer(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleRegisterPlayer() status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	player := decodePlayer(t, rec)
+	if player.ID == "" {
+		t.Error("HandleRegisterPlayer() returned empty player id")
+	}
+	if player.Username != "alice" {
+		t.Errorf("Username = %s, want alice", player.Username)
+	}
+	if player.Level != 1 {
+		t.Errorf("Level = %d, want 1", player.Level)
+	}
+}
+
+func TestHandler_HandleRegisterPlayer_InvalidUsername(t *testing.T) {
+	handler := newPlayerTestHandler(t)
+
+	for _, username := range []string{"", "a", "   ", "ce pseudo est beaucoup beaucoup trop long"} {
+		body, _ := json.Marshal(map[string]string{"username": username})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/players", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+
+		handler.HandleRegisterPlayer(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("HandleRegisterPlayer(%q) status = %d, want %d", username, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestHandler_HandleRegisterPlayer_DuplicateUsername(t *testing.T) {
+	handler := newPlayerTestHandler(t)
+
+	body, _ := json.Marshal(map[string]string{"username": "alice"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/players", bytes.NewReader(body))
+	handler.HandleRegisterPlayer(httptest.NewRecorder(), req)
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/players", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleRegisterPlayer(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("HandleRegisterPlayer(duplicate) status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+}
+
+func TestHandler_HandleGetPlayer(t *testing.T) {
+	handler := newPlayerTestHandler(t)
+
+	body, _ := json.Marshal(map[string]string{"username": "alice"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/players", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleRegisterPlayer(rec, req)
+	created := decodePlayer(t, rec)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/players/"+created.ID, nil)
+	getReq.SetPathValue("id", created.ID)
+	getRec := httptest.NewRecorder()
+
+	handler.HandleGetPlayer(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("HandleGetPlayer() status = %d, want %d", getRec.Code, http.StatusOK)
+	}
+	fetched := decodePlayer(t, getRec)
+	if fetched.ID != created.ID || fetched.Username != "alice" {
+		t.Errorf("GetPlayer = %s/%s, want %s/alice", fetched.ID, fetched.Username, created.ID)
+	}
+}
+
+func TestHandler_HandleGetPlayer_NotFound(t *testing.T) {
+	handler := newPlayerTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/players/ghost", nil)
+	req.SetPathValue("id", "ghost")
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPlayer(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("HandleGetPlayer() status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
 func TestHandler_HandleLeaderboard_WrongMethod(t *testing.T) {
 	handler := newTestHandler()
 

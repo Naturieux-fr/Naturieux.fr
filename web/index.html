@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Naturieux - Quiz Naturaliste</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=1.2">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.3">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -32,7 +32,23 @@
             </header>
 
             <div class="menu-container">
-                <div class="player-info">
+                <!-- Account creation (first visit) -->
+                <div class="account-form" x-show="!player.id">
+                    <div class="avatar">🦊</div>
+                    <h2>Bienvenue !</h2>
+                    <p class="account-hint">Choisis ton pseudo pour rejoindre le classement</p>
+                    <input type="text" class="account-input"
+                           x-model="usernameInput"
+                           maxlength="20"
+                           placeholder="Ton pseudo"
+                           @keyup.enter="createAccount()">
+                    <button @click="createAccount()" class="primary-btn" :disabled="registering">
+                        <span x-show="!registering">C'est parti !</span>
+                        <span x-show="registering" class="loader-small"></span>
+                    </button>
+                </div>
+
+                <div class="player-info" x-show="player.id">
                     <div class="avatar">🦊</div>
                     <div class="player-details">
                         <span class="player-name" x-text="player.name">Joueur</span>
@@ -46,7 +62,7 @@
                     </div>
                 </div>
 
-                <div class="game-options">
+                <div class="game-options" x-show="player.id">
                     <h2>Nouvelle Partie</h2>
 
                     <div class="option-group">
@@ -279,6 +295,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=1.2"></script>
+    <script src="/static/js/app.js?v=1.3"></script>
 </body>
 </html>

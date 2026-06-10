@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
@@ -43,6 +44,9 @@ func (r *PlayerRepository) Create(ctx context.Context, player *gamification.Play
 		snap.CreatedAt.Format(time.RFC3339Nano),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ports.ErrAlreadyExists
+		}
 		return fmt.Errorf("inserting player: %w", err)
 	}
 	return nil

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
@@ -155,6 +156,10 @@ func (h *Handler) HandleStartSession(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.quizService.StartSession(r.Context(), serviceReq)
 	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "player not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -293,6 +298,91 @@ func questionToDTO(q *quiz.Question) QuestionDTO {
 	return dto
 }
 
+// PlayerDTO represents a player profile for API responses.
+type PlayerDTO struct {
+	ID           string   `json:"id"`
+	Username     string   `json:"username"`
+	Level        int      `json:"level"`
+	TotalXP      int      `json:"total_xp"`
+	XPInLevel    int      `json:"xp_in_level"`
+	XPForLevel   int      `json:"xp_for_level"`
+	TotalGames   int      `json:"total_games"`
+	Accuracy     float64  `json:"accuracy"`
+	BestStreak   int      `json:"best_streak"`
+	DailyStreak  int      `json:"daily_streak"`
+	Achievements []string `json:"achievements"`
+}
+
+// playerToDTO converts a domain Player to a DTO.
+func playerToDTO(p *gamification.Player) PlayerDTO {
+	achievements := make([]string, len(p.Achievements()))
+	for i, a := range p.Achievements() {
+		achievements[i] = string(a)
+	}
+
+	xpForLevel := gamification.XPForLevel(p.Level())
+	return PlayerDTO{
+		ID:           p.ID(),
+		Username:     p.Username(),
+		Level:        p.Level(),
+		TotalXP:      p.TotalXP(),
+		XPInLevel:    xpForLevel - p.XPToNextLevel(),
+		XPForLevel:   xpForLevel,
+		TotalGames:   p.TotalGames(),
+		Accuracy:     p.Accuracy(),
+		BestStreak:   p.BestStreak(),
+		DailyStreak:  p.DailyStreak(),
+		Achievements: achievements,
+	}
+}
+
+// HandleRegisterPlayer handles POST /api/v1/players
+func (h *Handler) HandleRegisterPlayer(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	player, err := h.quizService.RegisterPlayer(r.Context(), req.Username)
+	if err != nil {
+		switch {
+		case errors.Is(err, appquiz.ErrInvalidUsername):
+			writeError(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, ports.ErrAlreadyExists):
+			writeError(w, http.StatusConflict, "username already taken")
+		default:
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	writeSuccess(w, playerToDTO(player))
+}
+
+// HandleGetPlayer handles GET /api/v1/players/{id}
+func (h *Handler) HandleGetPlayer(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "player id is required")
+		return
+	}
+
+	player, err := h.quizService.GetPlayer(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "player not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeSuccess(w, playerToDTO(player))
+}
+
 // LeaderboardEntryDTO represents one ranked player for API responses.
 type LeaderboardEntryDTO struct {
 	Rank       int     `json:"rank"`
@@ -367,6 +457,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.HandleHealthCheck)
 	mux.HandleFunc("/api/v1/config", h.HandleConfig)
 	mux.HandleFunc("/api/v1/leaderboard", h.HandleLeaderboard)
+	mux.HandleFunc("POST /api/v1/players", h.HandleRegisterPlayer)
+	mux.HandleFunc("GET /api/v1/players/{id}", h.HandleGetPlayer)
 	mux.HandleFunc("/api/v1/quiz/start", h.HandleStartSession)
 	mux.HandleFunc("/api/v1/quiz/answer", h.HandleSubmitAnswer)
 	mux.HandleFunc("/api/v1/quiz/abandon", h.HandleAbandonSession)
