@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Local tooling caches
+.claude
+.serena
+.playwright-mcp
+
+# Build artifacts
+bin/
+dist/
+*.exe
+main.exe
+server
+
+# Test / coverage output
+*.out
+coverage.html
+
+# Local databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Docs and reports (not needed in the image)
+docs/
+*.md
+QUALITY_REPORT.md
+SECURITY_REPORT.md
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,18 @@
+services:
+  naturieux:
+    build: .
+    image: naturieux:latest
+    container_name: naturieux
+    ports:
+      - "8080:8080"
+    environment:
+      # Set DEV_MODE=1 to use mock data instead of the iNaturalist API
+      DEV_MODE: "${DEV_MODE:-0}"
+      PORT: "8080"
+      DB_PATH: "/data/naturieux.db"
+    volumes:
+      - naturieux-data:/data
+    restart: unless-stopped
+
+volumes:
+  naturieux-data:
