@@ -3,298 +3,278 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naturieux - Quiz Naturaliste</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=1.3">
+    <title>Naturieux — Carnet d'identification</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><path d=%22M16 28V11%22 fill=%22none%22 stroke=%22%2324402c%22 stroke-width=%222%22/><path d=%22M16 19c-5 0-8-3-8-8 5 0 8 3 8 8ZM16 16c4 0 6.5-2.6 6.5-6.5C18.5 9.5 16 12 16 16Z%22 fill=%22%2324402c%22/></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <!-- Alpine.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
 </head>
 <body>
-    <div class="app" x-data="quizApp()">
-        <!-- Dev Mode Indicator -->
-        <div x-show="devMode" class="dev-mode-badge">
-            🔧 DEV MODE
-        </div>
+    <!-- Atmosphere: paper grain + vignette -->
+    <div class="grain" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
 
-        <!-- Home Screen -->
-        <section x-show="screen === 'home'" x-transition class="screen">
-            <header class="hero">
-                <div class="logo">
-                    <span class="logo-icon">🌿</span>
-                    <h1>Naturieux</h1>
+    <div class="app" x-data="quizApp()">
+        <div x-show="devMode" class="dev-badge">Mode démonstration</div>
+
+        <!-- ============ ACCUEIL ============ -->
+        <section x-show="screen === 'home'" x-transition.opacity class="screen home">
+            <header class="masthead reveal" style="--d:0">
+                <div class="emblem" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="30" class="seal-ring"/>
+                        <circle cx="32" cy="32" r="25" class="seal-ring thin"/>
+                        <path d="M32 50V28" class="stem"/>
+                        <path d="M32 42c-8 0-13-5-13-13 8 0 13 5 13 13Z" class="leaf"/>
+                        <path d="M32 37c6.5 0 10.5-4 10.5-10.5C36 26.5 32 30.5 32 37Z" class="leaf"/>
+                    </svg>
                 </div>
-                <p class="tagline">Testez vos connaissances sur la nature</p>
+                <p class="kicker">Société d'observation du vivant</p>
+                <h1 class="wordmark">Naturieux</h1>
+                <p class="subtitle"><em>Ars discernendi naturæ</em> — l'art de reconnaître les espèces</p>
+                <div class="rule" aria-hidden="true"><span></span>✦<span></span></div>
             </header>
 
-            <div class="menu-container">
-                <!-- Account creation (first visit) -->
-                <div class="account-form" x-show="!player.id">
-                    <div class="avatar">🦊</div>
-                    <h2>Bienvenue !</h2>
-                    <p class="account-hint">Choisis ton pseudo pour rejoindre le classement</p>
-                    <input type="text" class="account-input"
-                           x-model="usernameInput"
-                           maxlength="20"
-                           placeholder="Ton pseudo"
-                           @keyup.enter="createAccount()">
-                    <button @click="createAccount()" class="primary-btn" :disabled="registering">
-                        <span x-show="!registering">C'est parti !</span>
-                        <span x-show="registering" class="loader-small"></span>
-                    </button>
-                </div>
-
-                <div class="player-info" x-show="player.id">
-                    <div class="avatar">🦊</div>
-                    <div class="player-details">
-                        <span class="player-name" x-text="player.name">Joueur</span>
-                        <span class="player-level">Niveau <span x-text="player.level">1</span></span>
+            <div class="stack">
+                <!-- Première visite : ouverture du carnet -->
+                <article class="plate reveal" style="--d:1" x-show="!player.id">
+                    <span class="plate-no">Pl. 0</span>
+                    <h2 class="plate-title">Ouvrez votre carnet</h2>
+                    <p class="plate-lead">Inscrivez votre nom de naturaliste pour entrer au registre.</p>
+                    <div class="field-row">
+                        <input type="text" class="ink-field" x-model="usernameInput" maxlength="20"
+                               placeholder="Votre nom" @keyup.enter="createAccount()">
+                        <button @click="createAccount()" class="btn btn-solid" :disabled="registering">
+                            <span x-show="!registering">Commencer</span>
+                            <span x-show="registering" class="spinner"></span>
+                        </button>
                     </div>
-                    <div class="player-xp">
-                        <div class="xp-bar">
-                            <div class="xp-fill" :style="`width: ${player.xpPercent}%`"></div>
-                        </div>
-                        <span class="xp-text" x-text="`${player.xp} / ${player.xpNext} XP`">0 / 100 XP</span>
+                </article>
+
+                <!-- Carte de membre -->
+                <article class="member-card reveal" style="--d:1" x-show="player.id">
+                    <div class="member-seal" aria-hidden="true">
+                        <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" class="seal-ring"/><path d="M24 38V20" class="stem"/><path d="M24 32c-6 0-9.5-3.5-9.5-9.5C20.5 22.5 24 26 24 32Z" class="leaf"/></svg>
                     </div>
-                </div>
+                    <div class="member-id">
+                        <span class="member-role">Naturaliste</span>
+                        <span class="member-name" x-text="player.name">Joueur</span>
+                    </div>
+                    <div class="member-grade">
+                        <span class="grade-label">Grade</span>
+                        <span class="grade-value" x-text="player.level">1</span>
+                        <div class="xp-rail"><div class="xp-sap" :style="`width:${player.xpPercent}%`"></div></div>
+                        <span class="xp-note" x-text="`${player.xp} / ${player.xpNext} points`">0</span>
+                    </div>
+                </article>
 
-                <div class="game-options" x-show="player.id">
-                    <h2>Nouvelle Partie</h2>
+                <!-- Préparer une sortie -->
+                <article class="plate reveal" style="--d:2" x-show="player.id">
+                    <span class="plate-no">Pl. I</span>
+                    <h2 class="plate-title">Préparer une sortie</h2>
 
-                    <div class="option-group">
-                        <label>Difficulte</label>
-                        <div class="difficulty-selector">
+                    <div class="form-block">
+                        <label class="form-legend">Niveau d'épreuve</label>
+                        <div class="grade-grid">
                             <template x-for="diff in difficulties" :key="diff.id">
-                                <button class="diff-btn"
-                                        :class="{ 'active': settings.difficulty === diff.id }"
+                                <button class="grade-chip" :class="{ active: settings.difficulty === diff.id }"
                                         @click="settings.difficulty = diff.id">
-                                    <span class="diff-icon" x-text="diff.icon"></span>
-                                    <span class="diff-name" x-text="diff.name"></span>
-                                    <span class="diff-desc" x-text="diff.desc"></span>
+                                    <span class="numeral" x-text="diff.icon"></span>
+                                    <span class="chip-name" x-text="diff.name"></span>
+                                    <span class="chip-desc" x-text="diff.desc"></span>
                                 </button>
                             </template>
                         </div>
                     </div>
 
-                    <div class="option-group">
-                        <label>Categorie</label>
-                        <div class="category-selector">
+                    <div class="form-block">
+                        <label class="form-legend">Embranchement</label>
+                        <div class="taxa-grid">
                             <template x-for="cat in categories" :key="cat.id">
-                                <button class="cat-btn"
-                                        :class="{ 'active': settings.taxon === cat.id }"
+                                <button class="taxa-chip" :class="{ active: settings.taxon === cat.id }"
                                         @click="settings.taxon = cat.id">
-                                    <span x-text="cat.icon"></span>
-                                    <span x-text="cat.name"></span>
+                                    <span class="taxa-glyph" x-html="cat.svg"></span>
+                                    <span class="taxa-name" x-text="cat.name"></span>
                                 </button>
                             </template>
                         </div>
                     </div>
 
-                    <div class="option-group">
-                        <label>Nombre de questions</label>
-                        <div class="question-count-selector">
+                    <div class="form-block">
+                        <label class="form-legend">Nombre de planches</label>
+                        <div class="count-row">
                             <template x-for="count in [5, 10, 15, 20]" :key="count">
-                                <button class="count-btn"
-                                        :class="{ 'active': settings.questionCount === count }"
-                                        @click="settings.questionCount = count"
-                                        x-text="count">
-                                </button>
+                                <button class="count-chip" :class="{ active: settings.questionCount === count }"
+                                        @click="settings.questionCount = count" x-text="count"></button>
                             </template>
                         </div>
                     </div>
 
-                    <button @click="startGame()" class="primary-btn" :disabled="loading">
-                        <span x-show="!loading">Commencer</span>
-                        <span x-show="loading" class="loader-small"></span>
-                        <span class="btn-icon">→</span>
-                    </button>
-
-                    <button @click="showLeaderboard()" class="secondary-btn leaderboard-btn">
-                        🏆 Classement
-                    </button>
-                </div>
+                    <div class="plate-actions">
+                        <button @click="startGame()" class="btn btn-solid btn-lg" :disabled="loading">
+                            <span x-show="!loading">Partir en herborisation</span>
+                            <span x-show="loading" class="spinner"></span>
+                        </button>
+                        <button @click="showLeaderboard()" class="btn btn-quiet">Consulter le registre</button>
+                    </div>
+                </article>
             </div>
         </section>
 
-        <!-- Quiz Screen -->
-        <section x-show="screen === 'quiz'" x-transition class="screen">
-            <header class="quiz-header">
-                <div class="quiz-progress">
-                    <span x-text="`${currentQuestion}/${totalQuestions}`">1/10</span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" :style="`width: ${(currentQuestion/totalQuestions)*100}%`"></div>
-                    </div>
+        <!-- ============ QUIZ ============ -->
+        <section x-show="screen === 'quiz'" x-transition.opacity class="screen quiz">
+            <header class="field-bar">
+                <div class="progress-wrap">
+                    <span class="progress-count" x-text="`Planche ${currentQuestion} / ${totalQuestions}`">1 / 10</span>
+                    <div class="progress-rail"><div class="progress-sap" :style="`width:${(currentQuestion/totalQuestions)*100}%`"></div></div>
                 </div>
-                <div class="quiz-stats">
-                    <div class="stat">
-                        <span class="stat-icon">🔥</span>
-                        <span x-text="streak">0</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-icon">⭐</span>
-                        <span x-text="score">0</span>
-                    </div>
+                <div class="field-stats">
+                    <span class="fstat" title="Série"><b x-text="streak">0</b> série</span>
+                    <span class="fstat" title="Points"><b x-text="score">0</b> pts</span>
+                    <button @click="quitGame()" class="abandon" title="Abandonner">✕</button>
                 </div>
-                <button @click="quitGame()" class="icon-btn" title="Quitter">✕</button>
             </header>
 
-            <div class="quiz-content">
-                <div class="timer-container" x-data="{ circumference: 2 * Math.PI * 45 }">
-                    <svg class="timer-svg" viewBox="0 0 100 100">
-                        <circle class="timer-bg" cx="50" cy="50" r="45"/>
-                        <circle class="timer-progress" cx="50" cy="50" r="45"
-                                :stroke-dasharray="circumference"
-                                :stroke-dashoffset="circumference * (1 - timer/timeLimit)"
-                                :class="{ 'timer-warning': timer <= 5 }"/>
+            <div class="specimen">
+                <div class="timer-ring">
+                    <svg viewBox="0 0 100 100">
+                        <circle class="ring-bg" cx="50" cy="50" r="45"/>
+                        <circle class="ring-fg" cx="50" cy="50" r="45"
+                                pathLength="100"
+                                :stroke-dasharray="100"
+                                :stroke-dashoffset="100 * (1 - timer/timeLimit)"
+                                :class="{ warning: timer <= 5 }"/>
                     </svg>
-                    <span class="timer-text" x-text="timer" :class="{ 'timer-warning': timer <= 5 }"></span>
+                    <span class="ring-num" x-text="timer" :class="{ warning: timer <= 5 }"></span>
                 </div>
 
-                <div class="question-container">
-                    <div class="image-container">
-                        <img :src="question.mediaUrl || null" alt="Identifiez cette espece"
-                             x-show="question.mediaUrl"
-                             @load="onImageLoad()"
-                             @error="onImageError()"
-                             :class="{ 'loaded': imageLoaded }">
-                        <div class="image-loader" x-show="!imageLoaded">
-                            <div class="loader-spinner"></div>
-                            <p x-show="timerPaused" class="loading-text">Chargement de l'image...</p>
+                <figure class="mount">
+                    <span class="corner tl"></span><span class="corner tr"></span>
+                    <span class="corner bl"></span><span class="corner br"></span>
+                    <div class="mount-frame">
+                        <img :src="question.mediaUrl || null" alt="Spécimen à identifier"
+                             x-show="question.mediaUrl" @load="onImageLoad()" @error="onImageError()"
+                             :class="{ loaded: imageLoaded }">
+                        <div class="mount-loading" x-show="!imageLoaded">
+                            <div class="spinner big"></div>
+                            <p x-show="timerPaused">Développement de la plaque…</p>
                         </div>
                     </div>
-                    <p class="photo-credit" x-show="question.mediaAttribution" x-text="question.mediaAttribution"></p>
-                </div>
+                    <figcaption class="mount-caption" x-show="question.mediaAttribution" x-text="question.mediaAttribution"></figcaption>
+                </figure>
 
-                <div class="choices-container">
-                    <template x-for="choice in question.choices" :key="choice.species_id">
-                        <button class="choice-btn"
+                <p class="determine">Quelle est cette espèce ?</p>
+                <div class="key-list">
+                    <template x-for="(choice, i) in question.choices" :key="choice.species_id">
+                        <button class="key-entry"
                                 :class="{
-                                    'selected': selectedAnswer === choice.species_id,
-                                    'correct': showFeedback && choice.species_id === correctAnswer,
-                                    'wrong': showFeedback && selectedAnswer === choice.species_id && choice.species_id !== correctAnswer,
-                                    'disabled': showFeedback
+                                    selected: selectedAnswer === choice.species_id,
+                                    correct: showFeedback && choice.species_id === correctAnswer,
+                                    wrong: showFeedback && selectedAnswer === choice.species_id && choice.species_id !== correctAnswer,
+                                    locked: showFeedback
                                 }"
-                                @click="submitAnswer(choice.species_id)"
-                                :disabled="showFeedback">
-                            <span x-text="choice.display_name"></span>
+                                @click="submitAnswer(choice.species_id)" :disabled="showFeedback">
+                            <span class="key-letter" x-text="String.fromCharCode(97 + i)"></span>
+                            <span class="key-name" x-text="choice.display_name"></span>
                         </button>
                     </template>
                 </div>
             </div>
 
-            <!-- Feedback Overlay -->
-            <div class="feedback-overlay" x-show="showFeedback" x-transition.opacity>
-                <div class="feedback-card" :class="isCorrect ? 'correct' : 'wrong'">
-                    <div class="feedback-icon" x-text="isCorrect ? '✓' : '✗'"></div>
-                    <h3 x-text="isCorrect ? 'Correct!' : 'Incorrect'"></h3>
-                    <p x-text="feedbackText"></p>
-                    <div class="feedback-score" x-show="isCorrect">
-                        +<span x-text="lastScore"></span> points
-                    </div>
-                    <button @click="nextQuestion()" class="primary-btn">
-                        <span x-text="sessionComplete ? 'Voir les resultats' : 'Question suivante'"></span>
+            <!-- Verdict -->
+            <div class="verdict-veil" x-show="showFeedback" x-transition.opacity>
+                <div class="verdict" :class="isCorrect ? 'good' : 'bad'">
+                    <div class="verdict-stamp" x-text="isCorrect ? 'Exact' : 'Erroné'"></div>
+                    <h3 x-text="isCorrect ? 'Bien observé' : 'Détermination erronée'"></h3>
+                    <p class="verdict-text" x-text="feedbackText"></p>
+                    <div class="verdict-pts" x-show="isCorrect">+<span x-text="lastScore"></span> points</div>
+                    <button @click="nextQuestion()" class="btn btn-solid">
+                        <span x-text="sessionComplete ? 'Voir le bilan' : 'Planche suivante'"></span>
                     </button>
                 </div>
             </div>
         </section>
 
-        <!-- Results Screen -->
-        <section x-show="screen === 'results'" x-transition class="screen">
-            <div class="results-container">
-                <div class="results-header">
-                    <div class="trophy" x-text="getTrophy()">🏆</div>
-                    <h2>Partie terminee!</h2>
-                    <div class="final-score">
-                        <span class="score-label">Score final</span>
-                        <span class="score-value" x-text="score">0</span>
+        <!-- ============ BILAN ============ -->
+        <section x-show="screen === 'results'" x-transition.opacity class="screen report">
+            <article class="plate report-plate reveal" style="--d:0">
+                <span class="plate-no">Compte rendu</span>
+                <div class="report-crest" aria-hidden="true">
+                    <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" class="seal-ring"/><circle cx="32" cy="32" r="24" class="seal-ring thin"/><path d="M32 48V26" class="stem"/><path d="M32 40c-7 0-11-4-11-11 7 0 11 4 11 11ZM32 35c5.5 0 9-3.5 9-9-5.5 0-9 3.5-9 9Z" class="leaf"/></svg>
+                </div>
+                <h2 class="report-title">Sortie achevée</h2>
+
+                <div class="tally">
+                    <span class="tally-label">Récolte totale</span>
+                    <span class="tally-score" x-text="score">0</span>
+                    <span class="tally-unit">points</span>
+                </div>
+
+                <div class="report-grid">
+                    <div class="report-cell">
+                        <span class="cell-value" x-text="correctCount">0</span>
+                        <span class="cell-label">Identifications</span>
+                    </div>
+                    <div class="report-cell">
+                        <span class="cell-value" x-text="`${accuracy.toFixed(0)}%`">0%</span>
+                        <span class="cell-label">Justesse</span>
+                    </div>
+                    <div class="report-cell">
+                        <span class="cell-value" x-text="bestStreak">0</span>
+                        <span class="cell-label">Plus longue série</span>
                     </div>
                 </div>
 
-                <div class="results-stats">
-                    <div class="result-stat">
-                        <span class="result-icon">✓</span>
-                        <span class="result-value" x-text="correctCount">0</span>
-                        <span class="result-label">Bonnes reponses</span>
-                    </div>
-                    <div class="result-stat">
-                        <span class="result-icon">📊</span>
-                        <span class="result-value" x-text="`${accuracy.toFixed(0)}%`">0%</span>
-                        <span class="result-label">Precision</span>
-                    </div>
-                    <div class="result-stat">
-                        <span class="result-icon">🔥</span>
-                        <span class="result-value" x-text="bestStreak">0</span>
-                        <span class="result-label">Meilleure serie</span>
-                    </div>
-                </div>
+                <div class="report-xp">+<span x-text="xpGained">0</span> points d'expérience</div>
 
-                <div class="xp-gained">
-                    <span class="xp-icon">✨</span>
-                    <span>+<span x-text="xpGained">0</span> XP gagnes!</span>
+                <div class="plate-actions">
+                    <button @click="playAgain()" class="btn btn-solid btn-lg">Repartir</button>
+                    <button @click="goHome()" class="btn btn-quiet">Retour au carnet</button>
                 </div>
-
-                <div class="results-actions">
-                    <button @click="playAgain()" class="primary-btn">Rejouer</button>
-                    <button @click="goHome()" class="secondary-btn">Menu principal</button>
-                </div>
-            </div>
+            </article>
         </section>
 
-        <!-- Leaderboard Screen -->
-        <section x-show="screen === 'leaderboard'" x-transition class="screen">
-            <div class="leaderboard-container">
-                <header class="leaderboard-header">
-                    <h2>🏆 Classement</h2>
-                    <p class="leaderboard-subtitle">Les meilleurs naturalistes</p>
-                </header>
+        <!-- ============ REGISTRE ============ -->
+        <section x-show="screen === 'leaderboard'" x-transition.opacity class="screen registry">
+            <article class="plate reveal" style="--d:0">
+                <span class="plate-no">Registre</span>
+                <h2 class="plate-title">Les grands naturalistes</h2>
+                <p class="plate-lead">Classés au mérite de leurs observations.</p>
 
-                <div class="leaderboard-list" x-show="leaderboard.length > 0">
+                <ol class="ledger" x-show="leaderboard.length > 0">
                     <template x-for="entry in leaderboard" :key="entry.rank">
-                        <div class="leaderboard-entry" :class="{ 'top-three': entry.rank <= 3 }">
-                            <span class="entry-rank"
-                                  x-text="entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : entry.rank">
+                        <li class="ledger-row" :class="{ laureate: entry.rank <= 3 }">
+                            <span class="ledger-rank" x-text="entry.rank"></span>
+                            <span class="ledger-name">
+                                <span x-text="entry.username"></span>
+                                <small x-text="`Grade ${entry.level}`"></small>
                             </span>
-                            <div class="entry-player">
-                                <span class="entry-name" x-text="entry.username"></span>
-                                <span class="entry-level" x-text="`Niveau ${entry.level}`"></span>
-                            </div>
-                            <div class="entry-stats">
-                                <span class="entry-xp" x-text="`${entry.total_xp} XP`"></span>
-                                <span class="entry-detail"
-                                      x-text="`${entry.total_games} parties • ${Math.round(entry.accuracy)}%`">
-                                </span>
-                            </div>
-                        </div>
+                            <span class="ledger-meta">
+                                <b x-text="`${entry.total_xp} pts`"></b>
+                                <small x-text="`${entry.total_games} sorties · ${Math.round(entry.accuracy)}%`"></small>
+                            </span>
+                        </li>
                     </template>
+                </ol>
+                <p class="empty-note" x-show="leaderboard.length === 0">Le registre est encore vierge. Soyez le premier à herboriser.</p>
+
+                <div class="plate-actions">
+                    <button @click="goHome()" class="btn btn-quiet">← Retour au carnet</button>
                 </div>
-
-                <p class="leaderboard-empty" x-show="leaderboard.length === 0">
-                    Aucun joueur classe pour le moment. Lancez une partie !
-                </p>
-
-                <button @click="goHome()" class="secondary-btn">← Retour</button>
-            </div>
+            </article>
         </section>
 
-        <!-- Loading Overlay -->
-        <div class="loading-overlay" x-show="loading" x-transition.opacity>
-            <div class="loader">
-                <div class="loader-spinner"></div>
-                <p>Chargement...</p>
-            </div>
+        <!-- Voile de chargement -->
+        <div class="veil" x-show="loading" x-transition.opacity>
+            <div class="veil-inner"><div class="spinner big"></div><p>En chemin…</p></div>
         </div>
 
-        <!-- Error Toast -->
-        <div class="toast" x-show="error" x-transition
-             @click="error = ''"
-             x-text="error">
-        </div>
+        <!-- Avis -->
+        <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=1.3"></script>
+    <script src="/static/js/app.js?v=2.0"></script>
 </body>
 </html>

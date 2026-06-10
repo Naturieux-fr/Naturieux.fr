@@ -1,171 +1,89 @@
-/* Admin back-office styles (complements style.css) */
+/* Cabinet de conservation — back-office, thème herbier (complète style.css) */
 
-.admin {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 32px 20px;
+.admin { max-width: 760px; }
+
+.ink-field.block { display: block; width: 100%; margin-top: 14px; }
+.ink-select {
+    display: block; width: 100%; margin-top: 14px;
+    font-family: var(--serif); font-size: 1.05rem; color: var(--ink);
+    background: transparent; border: none; border-bottom: 1.5px solid var(--line);
+    padding: 8px 2px;
 }
+.ink-select:focus { outline: none; border-bottom-color: var(--rust); }
 
-.admin-login {
-    max-width: 360px;
-    margin: 60px auto;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    text-align: center;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 32px 24px;
+/* ---- Connexion ---- */
+.adm-login { max-width: 420px; margin: 8vh auto 0; text-align: center; }
+.adm-login .emblem svg { width: 64px; height: 64px; }
+.adm-login .ink-field { text-align: center; }
+.adm-login .btn-lg { margin-top: 20px; }
+.adm-error { color: var(--rust); font-style: italic; font-family: var(--serif); margin-top: 14px; }
+
+/* ---- En-tête console ---- */
+.adm-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding-bottom: 18px; margin-bottom: 24px; border-bottom: 1px solid var(--line);
 }
+.adm-brand { display: flex; align-items: center; gap: 12px; }
+.adm-mark svg { width: 30px; height: 30px; }
+.adm-mark .stem { fill: none; stroke: var(--forest); stroke-width: 2; stroke-linecap: round; }
+.adm-mark .leaf { fill: var(--forest); }
+.adm-head h1 { font-family: var(--serif); font-weight: 600; font-size: 1.5rem; color: var(--forest-2); }
+.adm-out { padding: 8px 18px; }
 
-.admin-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 24px;
+.plate + .plate { margin-top: 22px; }
+
+/* ---- Liste de recherche ---- */
+.find-list { list-style: none; margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.find-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 14px; border: 1px solid var(--hair); cursor: pointer;
+    transition: border-color .2s, background .2s;
 }
+.find-item:hover { border-color: var(--moss); }
+.find-item.active { border-color: var(--forest); background: var(--paper-3); box-shadow: inset 0 0 0 1px var(--forest); }
+.find-names { display: flex; flex-direction: column; }
+.find-names em { font-family: var(--serif); font-size: 1.05rem; color: var(--forest-2); }
+.find-names span { font-size: .82rem; color: var(--ink-3); }
+.find-cd { font-size: .72rem; color: var(--ink-3); white-space: nowrap; }
 
-.admin-logout {
-    width: auto;
-    padding: 8px 16px;
+/* ---- Planches existantes ---- */
+.photo-rows { margin: 14px 0 4px; display: flex; flex-direction: column; }
+.photo-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 0; border-bottom: 1px solid var(--hair);
 }
-
-.admin-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    margin-bottom: 20px;
+.photo-mini { width: 60px; height: 44px; object-fit: cover; border: 1px solid var(--line); background: var(--paper-2); flex-shrink: 0; }
+.photo-link { flex: 1; font-size: .8rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photo-diff { font-family: var(--serif); font-style: italic; font-size: .85rem; color: var(--rust); min-width: 80px; text-align: right; }
+.btn-trash {
+    background: transparent; border: 1px solid var(--hair); cursor: pointer;
+    width: 30px; height: 30px; color: var(--ink-3); flex-shrink: 0;
+    transition: border-color .2s, color .2s;
 }
+.btn-trash:hover { border-color: var(--rust); color: var(--rust); }
 
-.admin-card h2 {
-    font-size: 1.1rem;
-    margin-bottom: 14px;
-}
+.adm-sub { font-family: var(--serif); font-weight: 600; font-size: 1.1rem; color: var(--forest-2); margin: 22px 0 12px; }
 
-.admin-card h3 {
-    font-size: 0.95rem;
-    margin: 18px 0 10px;
-    color: var(--text-secondary);
-}
-
-.admin-error {
-    color: var(--danger);
-    font-size: 0.875rem;
-}
-
-.taxa-list {
-    list-style: none;
-    margin-top: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.taxa-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.taxa-item:hover { border-color: var(--primary); }
-.taxa-item.selected { border-color: var(--primary); background: var(--bg-hover); }
-
-.taxa-sci { font-weight: 600; }
-.taxa-vern { color: var(--text-secondary); margin-left: 8px; }
-.taxa-cdnom { color: var(--text-muted); font-size: 0.75rem; }
-
-.photos-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 8px;
-}
-
-.photos-table th,
-.photos-table td {
-    text-align: left;
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.85rem;
-    vertical-align: middle;
-}
-
-.photo-thumb {
-    width: 56px;
-    height: 42px;
-    object-fit: cover;
-    border-radius: 6px;
-    background: var(--bg-hover);
-}
-
-.photo-url {
-    max-width: 280px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-secondary);
-}
-
-.photo-form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.source-toggle {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
+/* ---- Source toggle + dépôt ---- */
+.source-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
 .toggle-btn {
-    flex: 1;
-    background: var(--bg-hover);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-secondary);
-    padding: 10px;
-    cursor: pointer;
-    transition: var(--transition);
+    flex: 1; background: var(--paper); border: 1px solid var(--hair); cursor: pointer;
+    padding: 10px; font-size: .85rem; color: var(--ink-2);
+    transition: border-color .2s, color .2s, background .2s;
 }
+.toggle-btn.active { border-color: var(--forest); background: var(--paper-3); color: var(--forest-2); font-weight: 600; }
 
-.toggle-btn.active {
-    border-color: var(--primary);
-    color: var(--text-primary);
+.photo-form { display: flex; flex-direction: column; gap: 4px; }
+.photo-form .btn-solid { margin-top: 14px; }
+.drop-zone {
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+    padding: 22px; border: 1px dashed var(--line); background: var(--paper);
 }
+.drop-zone input[type=file] { font-family: var(--sans); font-size: .85rem; color: var(--ink-2); }
+.drop-preview { max-width: 100%; max-height: 220px; object-fit: contain; border: 1px solid var(--line); }
 
-.upload-zone {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 16px;
-    border: 1px dashed var(--border);
-    border-radius: var(--radius);
+@media (max-width: 540px) {
+    .photo-row { flex-wrap: wrap; }
+    .photo-link { flex-basis: 100%; order: 3; }
+    .photo-diff { min-width: 0; }
 }
-
-.upload-preview {
-    max-width: 100%;
-    max-height: 200px;
-    object-fit: contain;
-    border-radius: var(--radius);
-    align-self: center;
-}
-
-.danger-btn {
-    background: transparent;
-    color: var(--danger);
-    border: 1px solid var(--danger);
-    border-radius: var(--radius);
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.danger-btn:hover { background: var(--danger); color: #fff; }

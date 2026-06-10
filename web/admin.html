@@ -3,112 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naturieux — Administration</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=1.3">
-    <link rel="stylesheet" href="/static/css/admin.css?v=1.1">
+    <title>Naturieux — Cabinet de conservation</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><path d=%22M16 28V11%22 fill=%22none%22 stroke=%22%2324402c%22 stroke-width=%222%22/><path d=%22M16 19c-5 0-8-3-8-8 5 0 8 3 8 8ZM16 16c4 0 6.5-2.6 6.5-6.5C18.5 9.5 16 12 16 16Z%22 fill=%22%2324402c%22/></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+    <link rel="stylesheet" href="/static/css/admin.css?v=2.0">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
 </head>
 <body>
-    <div class="admin" x-data="adminApp()" x-init="init()">
+    <div class="grain" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
 
-        <!-- Login -->
-        <div class="admin-login" x-show="!token">
-            <div class="logo"><span class="logo-icon">🌿</span><h1>Administration</h1></div>
-            <p class="account-hint">Connexion réservée aux administrateurs</p>
-            <input type="text" class="account-input" x-model="login.username" placeholder="Identifiant" @keyup.enter="doLogin()">
-            <input type="password" class="account-input" x-model="login.password" placeholder="Mot de passe" @keyup.enter="doLogin()">
-            <button @click="doLogin()" class="primary-btn" :disabled="busy">Se connecter</button>
-            <p class="admin-error" x-show="error" x-text="error"></p>
-        </div>
+    <div class="screen admin" x-data="adminApp()" x-init="init()">
+
+        <!-- Connexion -->
+        <article class="plate adm-login reveal" style="--d:0" x-show="!token">
+            <div class="emblem" aria-hidden="true">
+                <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" class="seal-ring"/><circle cx="32" cy="32" r="25" class="seal-ring thin"/><path d="M32 50V28" class="stem"/><path d="M32 42c-8 0-13-5-13-13 8 0 13 5 13 13Z" class="leaf"/><path d="M32 37c6.5 0 10.5-4 10.5-10.5C36 26.5 32 30.5 32 37Z" class="leaf"/></svg>
+            </div>
+            <h1 class="plate-title">Cabinet de conservation</h1>
+            <p class="plate-lead">Accès réservé au conservateur.</p>
+            <input type="text" class="ink-field block" x-model="login.username" placeholder="Identifiant" @keyup.enter="doLogin()">
+            <input type="password" class="ink-field block" x-model="login.password" placeholder="Mot de passe" @keyup.enter="doLogin()">
+            <button @click="doLogin()" class="btn btn-solid btn-lg" :disabled="busy">Entrer</button>
+            <p class="adm-error" x-show="error" x-text="error"></p>
+        </article>
 
         <!-- Console -->
-        <div class="admin-console" x-show="token">
-            <header class="admin-header">
-                <div class="logo"><span class="logo-icon">🌿</span><h1>Gestion des photos</h1></div>
-                <button @click="logout()" class="secondary-btn admin-logout">Déconnexion</button>
+        <div x-show="token">
+            <header class="adm-head reveal" style="--d:0">
+                <div class="adm-brand">
+                    <span class="adm-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 28V11" class="stem"/><path d="M16 19c-5 0-8-3-8-8 5 0 8 3 8 8Z" class="leaf"/></svg></span>
+                    <h1>Conservation des planches</h1>
+                </div>
+                <button @click="logout()" class="btn btn-quiet adm-out">Quitter</button>
             </header>
 
-            <p class="admin-error" x-show="error" x-text="error"></p>
+            <p class="adm-error" x-show="error" x-text="error"></p>
 
-            <!-- Recherche d'un taxon -->
-            <section class="admin-card">
-                <h2>1. Chercher une espèce</h2>
-                <input type="text" class="account-input" x-model="search.query"
-                       placeholder="Nom scientifique ou français (ex. Vulpes, Renard)"
-                       @keyup.enter="doSearch()">
-                <button @click="doSearch()" class="secondary-btn" :disabled="busy">Rechercher</button>
+            <!-- Recherche -->
+            <article class="plate reveal" style="--d:1">
+                <span class="plate-no">I</span>
+                <h2 class="plate-title">Trouver une espèce</h2>
+                <div class="field-row">
+                    <input type="text" class="ink-field" x-model="search.query"
+                           placeholder="Nom scientifique ou français (ex. Vulpes, Renard)" @keyup.enter="doSearch()">
+                    <button @click="doSearch()" class="btn btn-quiet" :disabled="busy">Rechercher</button>
+                </div>
 
-                <ul class="taxa-list" x-show="search.results.length">
+                <ul class="find-list" x-show="search.results.length">
                     <template x-for="t in search.results" :key="t.cd_nom">
-                        <li class="taxa-item" :class="{ 'selected': selected && selected.cd_nom === t.cd_nom }"
-                            @click="select(t)">
-                            <div>
-                                <span class="taxa-sci" x-text="t.scientific_name"></span>
-                                <span class="taxa-vern" x-text="t.vernacular_name"></span>
-                            </div>
-                            <span class="taxa-cdnom" x-text="'cd_nom ' + t.cd_nom"></span>
+                        <li class="find-item" :class="{ active: selected && selected.cd_nom === t.cd_nom }" @click="select(t)">
+                            <span class="find-names">
+                                <em x-text="t.scientific_name"></em>
+                                <span x-text="t.vernacular_name"></span>
+                            </span>
+                            <span class="find-cd" x-text="'cd_nom ' + t.cd_nom"></span>
                         </li>
                     </template>
                 </ul>
-            </section>
+            </article>
 
-            <!-- Gestion des photos du taxon sélectionné -->
-            <section class="admin-card" x-show="selected">
-                <h2>2. Photos de
-                    <span x-text="selected ? selected.scientific_name : ''"></span>
-                    <span class="taxa-cdnom" x-text="selected ? '(cd_nom ' + selected.cd_nom + ')' : ''"></span>
+            <!-- Planches du taxon -->
+            <article class="plate reveal" style="--d:2" x-show="selected">
+                <span class="plate-no">II</span>
+                <h2 class="plate-title">
+                    Planches de <em x-text="selected ? selected.scientific_name : ''"></em>
                 </h2>
+                <p class="plate-lead" x-show="selected" x-text="selected ? 'cd_nom ' + selected.cd_nom : ''"></p>
 
-                <table class="photos-table" x-show="photos.length">
-                    <thead><tr><th>Aperçu</th><th>URL</th><th>Difficulté</th><th></th></tr></thead>
-                    <tbody>
-                        <template x-for="p in photos" :key="p.id">
-                            <tr>
-                                <td><img class="photo-thumb" :src="p.url" alt="" loading="lazy"></td>
-                                <td class="photo-url" x-text="p.url"></td>
-                                <td x-text="p.difficulty || '—'"></td>
-                                <td><button class="danger-btn" @click="removePhoto(p.id)">Supprimer</button></td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                <p class="account-hint" x-show="!photos.length">Aucune photo pour cette espèce.</p>
+                <div class="photo-rows" x-show="photos.length">
+                    <template x-for="p in photos" :key="p.id">
+                        <div class="photo-row">
+                            <img class="photo-mini" :src="p.url" alt="" loading="lazy">
+                            <span class="photo-link" x-text="p.url"></span>
+                            <span class="photo-diff" x-text="p.difficulty || '—'"></span>
+                            <button class="btn-trash" @click="removePhoto(p.id)" title="Retirer">✕</button>
+                        </div>
+                    </template>
+                </div>
+                <p class="empty-note" x-show="!photos.length">Aucune planche pour cette espèce.</p>
 
-                <h3>Ajouter une photo</h3>
-
-                <!-- Choix de la source : upload de fichier ou URL externe -->
+                <h3 class="adm-sub">Ajouter une planche</h3>
                 <div class="source-toggle">
-                    <button class="toggle-btn" :class="{ 'active': form.mode === 'upload' }" @click="form.mode = 'upload'">📤 Uploader un fichier</button>
-                    <button class="toggle-btn" :class="{ 'active': form.mode === 'url' }" @click="form.mode = 'url'">🔗 URL externe</button>
+                    <button class="toggle-btn" :class="{ active: form.mode === 'upload' }" @click="form.mode = 'upload'">Déposer un fichier</button>
+                    <button class="toggle-btn" :class="{ active: form.mode === 'url' }" @click="form.mode = 'url'">Lien externe</button>
                 </div>
 
                 <div class="photo-form">
                     <template x-if="form.mode === 'upload'">
-                        <div class="upload-zone">
+                        <div class="drop-zone">
                             <input type="file" accept="image/*" @change="onFile($event)">
-                            <img class="upload-preview" x-show="form.preview" :src="form.preview" alt="">
+                            <img class="drop-preview" x-show="form.preview" :src="form.preview" alt="">
                         </div>
                     </template>
                     <template x-if="form.mode === 'url'">
-                        <input type="url" class="account-input" x-model="form.url" placeholder="URL de la photo">
+                        <input type="url" class="ink-field block" x-model="form.url" placeholder="URL de la photo">
                     </template>
 
-                    <input type="text" class="account-input" x-model="form.attribution" placeholder="Attribution (auteur, licence)">
-                    <input type="text" class="account-input" x-model="form.license" placeholder="Code licence (ex. cc-by)">
-                    <select class="account-input" x-model="form.difficulty">
+                    <input type="text" class="ink-field block" x-model="form.attribution" placeholder="Attribution (auteur, licence)">
+                    <input type="text" class="ink-field block" x-model="form.license" placeholder="Code licence (ex. cc-by)">
+                    <select class="ink-select" x-model="form.difficulty">
                         <option value="">Difficulté (optionnel)</option>
-                        <option value="beginner">Débutant</option>
-                        <option value="intermediate">Intermédiaire</option>
+                        <option value="beginner">Apprenti</option>
+                        <option value="intermediate">Amateur</option>
                         <option value="expert">Expert</option>
                         <option value="master">Maître</option>
                     </select>
-                    <button @click="submitPhoto()" class="primary-btn" :disabled="busy">Ajouter</button>
+                    <button @click="submitPhoto()" class="btn btn-solid" :disabled="busy">Ajouter au cabinet</button>
                 </div>
-            </section>
+            </article>
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=1.1"></script>
+    <script src="/static/js/admin.js?v=2.0"></script>
 </body>
 </html>

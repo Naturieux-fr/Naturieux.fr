@@ -64,23 +64,24 @@ function quizApp() {
         accuracy: 0,
         xpGained: 0,
 
-        // Data
+        // Data — difficulty levels are shown as engraved roman numerals
         difficulties: [
-            { id: 'beginner', name: 'Debutant', icon: '🌱', desc: '4 choix • 30s' },
-            { id: 'intermediate', name: 'Intermediaire', icon: '🌿', desc: '6 choix • 20s' },
-            { id: 'expert', name: 'Expert', icon: '🌳', desc: '8 choix • 15s' },
-            { id: 'master', name: 'Maitre', icon: '🏔️', desc: '10 choix • 10s' }
+            { id: 'beginner', name: 'Apprenti', icon: 'I', desc: '4 choix · 30s' },
+            { id: 'intermediate', name: 'Amateur', icon: 'II', desc: '6 choix · 20s' },
+            { id: 'expert', name: 'Expert', icon: 'III', desc: '8 choix · 15s' },
+            { id: 'master', name: 'Maître', icon: 'IV', desc: '10 choix · 10s' }
         ],
 
+        // Categories use hand-drawn line glyphs (rendered via x-html)
         categories: [
-            { id: '', name: 'Toutes', icon: '🌍' },
-            { id: 'Mammalia', name: 'Mammiferes', icon: '🦁' },
-            { id: 'Aves', name: 'Oiseaux', icon: '🦅' },
-            { id: 'Reptilia', name: 'Reptiles', icon: '🦎' },
-            { id: 'Amphibia', name: 'Amphibiens', icon: '🐸' },
-            { id: 'Insecta', name: 'Insectes', icon: '🦋' },
-            { id: 'Plantae', name: 'Plantes', icon: '🌸' },
-            { id: 'Fungi', name: 'Champignons', icon: '🍄' }
+            { id: '', name: 'Toutes', svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.4 2.5 13.2 0 16M12 4c-2.5 2.4-2.5 13.2 0 16"/></svg>' },
+            { id: 'Mammalia', name: 'Mammifères', svg: '<svg viewBox="0 0 24 24"><circle cx="9" cy="9.5" r="1.4"/><circle cx="15" cy="9.5" r="1.4"/><circle cx="6.5" cy="14" r="1.4"/><circle cx="17.5" cy="14" r="1.4"/><path d="M9 18c0-2.5 6-2.5 6 0 0 1.7-1.4 2.4-3 2.4S9 19.7 9 18Z"/></svg>' },
+            { id: 'Aves', name: 'Oiseaux', svg: '<svg viewBox="0 0 24 24"><path d="M4 16c4-1 6-4 6.5-8 .8 3 2.5 5 5.5 5.5-1 2.5-3.5 4.5-7 4.5-2 0-3.5-.7-5-2Z"/><path d="M16 13.5 20 11"/><circle cx="10.5" cy="8.2" r=".6"/></svg>' },
+            { id: 'Reptilia', name: 'Reptiles', svg: '<svg viewBox="0 0 24 24"><path d="M4 14c2-3 4 0 6-2s2-5 5-5 4 3 2 5"/><path d="M17 12c2 1 3 3 3 5"/><circle cx="6" cy="6.5" r=".6"/></svg>' },
+            { id: 'Amphibia', name: 'Amphibiens', svg: '<svg viewBox="0 0 24 24"><path d="M6 13c0-4 12-4 12 0 0 3-2.5 5-6 5s-6-2-6-5Z"/><circle cx="9" cy="8.5" r="1.6"/><circle cx="15" cy="8.5" r="1.6"/><path d="M5 19l2-2M19 19l-2-2"/></svg>' },
+            { id: 'Insecta', name: 'Insectes', svg: '<svg viewBox="0 0 24 24"><path d="M12 5v14M12 9c-3-4-8-2-8 1s5 4 8 1M12 9c3-4 8-2 8 1s-5 4-8 1M12 15c-2.5-2-6-1-6 1.5M12 15c2.5-2 6-1 6 1.5"/></svg>' },
+            { id: 'Plantae', name: 'Plantes', svg: '<svg viewBox="0 0 24 24"><path d="M12 21V7"/><path d="M12 13c-3 0-5-2-5-5 3 0 5 2 5 5ZM12 11c2.5 0 4-1.6 4-4-2.5 0-4 1.6-4 4Z"/></svg>' },
+            { id: 'Fungi', name: 'Champignons', svg: '<svg viewBox="0 0 24 24"><path d="M4 11c0-4 3.6-6 8-6s8 2 8 6c0 1-7 1.6-8 1.6S4 12 4 11Z"/><path d="M10 12.5c0 4 .5 6-1 8M14 12.5c0 4-.5 6 1 8"/></svg>' }
         ],
 
         // Initialize
