@@ -29,7 +29,8 @@ COPY --from=build /out/server /app/server
 COPY web /app/web
 
 ENV PORT=8080 \
-    DB_PATH=/data/naturieux.db
+    DB_PATH=/data/naturieux.db \
+    MEDIA_DIR=/data/media
 
 EXPOSE 8080
 VOLUME ["/data"]

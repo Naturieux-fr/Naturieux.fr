@@ -1,13 +1,16 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/storage"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
@@ -18,16 +21,26 @@ type AdminAuth interface {
 	Authorize(ctx context.Context, token string) (string, error)
 }
 
+// MediaStore stores uploaded photo files.
+type MediaStore interface {
+	Save(ctx context.Context, contentType string, r io.Reader) (storage.Saved, error)
+	Delete(ctx context.Context, url string) error
+}
+
+// maxUploadBytes caps an uploaded photo's size.
+const maxUploadBytes = 10 << 20 // 10 MiB
+
 // AdminHandler serves the back-office API. Photo management is only available
 // when the species source is TAXREF (photos is non-nil).
 type AdminHandler struct {
-	auth   AdminAuth
-	photos *taxref.Repository // nil when the species source has no managed photos
+	auth    AdminAuth
+	photos  *taxref.Repository // nil when the species source has no managed photos
+	storage MediaStore         // nil when uploads are not configured
 }
 
-// NewAdminHandler creates the admin API handler. photos may be nil.
-func NewAdminHandler(auth AdminAuth, photos *taxref.Repository) *AdminHandler {
-	return &AdminHandler{auth: auth, photos: photos}
+// NewAdminHandler creates the admin API handler. photos and store may be nil.
+func NewAdminHandler(auth AdminAuth, photos *taxref.Repository, store MediaStore) *AdminHandler {
+	return &AdminHandler{auth: auth, photos: photos, storage: store}
 }
 
 // RegisterRoutes wires the admin endpoints onto the mux.
@@ -36,6 +49,7 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/taxa", h.requireAdmin(h.handleSearchTaxa))
 	mux.HandleFunc("GET /api/v1/admin/taxa/{cd_nom}/photos", h.requireAdmin(h.handleListPhotos))
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/photos", h.requireAdmin(h.handleAddPhoto))
+	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/upload", h.requireAdmin(h.handleUploadPhoto))
 	mux.HandleFunc("DELETE /api/v1/admin/photos/{id}", h.requireAdmin(h.handleDeletePhoto))
 }
 
@@ -150,6 +164,68 @@ func (h *AdminHandler) handleAddPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeSuccess(w, map[string]interface{}{"id": id})
+}
+
+// handleUploadPhoto accepts a multipart upload, stores the image file and
+// records the photo for the taxon. Form fields: file, attribution, license,
+// difficulty.
+func (h *AdminHandler) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
+	if h.storage == nil {
+		writeError(w, http.StatusServiceUnavailable, "uploads are not configured")
+		return
+	}
+	cdNom, ok := pathInt(w, r, "cd_nom")
+	if !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+512)
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "a 'file' field is required")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	difficulty := r.FormValue("difficulty")
+	if difficulty != "" && !validPhotoDifficulty(difficulty) {
+		writeError(w, http.StatusBadRequest, "invalid difficulty")
+		return
+	}
+
+	// Sniff the real content type from the first bytes rather than trusting
+	// the client-declared type or the file name.
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+	contentType := http.DetectContentType(head[:n])
+	if _, err := storage.ExtensionFor(contentType); err != nil {
+		writeError(w, http.StatusUnsupportedMediaType, "only JPEG, PNG, WebP or GIF images are accepted")
+		return
+	}
+
+	body := io.MultiReader(bytes.NewReader(head[:n]), file)
+	saved, err := h.storage.Save(r.Context(), contentType, body)
+	if errors.Is(err, storage.ErrTooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, "file too large")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	id, err := h.photos.AddPhoto(r.Context(), cdNom, saved.URL, r.FormValue("attribution"), r.FormValue("license"), difficulty)
+	if errors.Is(err, ports.ErrNotFound) {
+		_ = h.storage.Delete(r.Context(), saved.URL) // don't keep an orphan file
+		writeError(w, http.StatusNotFound, "taxon not found")
+		return
+	}
+	if err != nil {
+		_ = h.storage.Delete(r.Context(), saved.URL)
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"id": id, "url": saved.URL})
 }
 
 // handleDeletePhoto removes a photo by id.

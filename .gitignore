@@ -20,6 +20,9 @@ coverage.html
 *.db-wal
 *.db-shm
 
+# Locally uploaded media
+/media/
+
 # Dependency directories
 vendor/
 

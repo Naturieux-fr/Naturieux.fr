@@ -10,7 +10,7 @@ function adminApp() {
         search: { query: '', results: [] },
         selected: null,
         photos: [],
-        form: { url: '', attribution: '', license: '', difficulty: '' },
+        form: { mode: 'upload', url: '', file: null, preview: '', attribution: '', license: '', difficulty: '' },
 
         init() {
             this.token = localStorage.getItem('naturieux_admin_token') || '';
@@ -93,7 +93,57 @@ function adminApp() {
             }
         },
 
-        async addPhoto() {
+        // Capture the chosen file and show a local preview.
+        onFile(event) {
+            const file = event.target.files[0];
+            this.form.file = file || null;
+            this.form.preview = file ? URL.createObjectURL(file) : '';
+        },
+
+        resetForm() {
+            this.form = { mode: this.form.mode, url: '', file: null, preview: '', attribution: '', license: '', difficulty: '' };
+        },
+
+        // Add a photo either by uploading a file or by referencing a URL.
+        submitPhoto() {
+            return this.form.mode === 'upload' ? this.uploadPhoto() : this.addPhotoByURL();
+        },
+
+        async uploadPhoto() {
+            if (!this.selected || !this.form.file) {
+                this.error = 'Choisissez un fichier image';
+                return;
+            }
+            this.busy = true;
+            this.error = '';
+            try {
+                const fd = new FormData();
+                fd.append('file', this.form.file);
+                fd.append('attribution', this.form.attribution);
+                fd.append('license', this.form.license);
+                fd.append('difficulty', this.form.difficulty);
+
+                const res = await fetch('/api/v1/admin/taxa/' + this.selected.cd_nom + '/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token },
+                    body: fd
+                });
+                if (res.status === 401 || res.status === 403) {
+                    this.logout();
+                    throw new Error('Session expirée, reconnectez-vous');
+                }
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Erreur');
+                this.resetForm();
+                await this.loadPhotos();
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.busy = false;
+            }
+        },
+
+        async addPhotoByURL() {
             if (!this.selected || !this.form.url.trim()) {
                 this.error = 'URL requise';
                 return;
@@ -107,7 +157,7 @@ function adminApp() {
                     license: this.form.license,
                     difficulty: this.form.difficulty
                 });
-                this.form = { url: '', attribution: '', license: '', difficulty: '' };
+                this.resetForm();
                 await this.loadPhotos();
             } catch (e) {
                 this.error = e.message;

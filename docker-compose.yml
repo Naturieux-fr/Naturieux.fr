@@ -10,6 +10,23 @@ services:
       DEV_MODE: "${DEV_MODE:-0}"
       PORT: "8080"
       DB_PATH: "/data/naturieux.db"
+      # Species source: inat (default) | taxref | mock
+      SPECIES_SOURCE: "${SPECIES_SOURCE:-inat}"
+      # Admin back-office (set both to enable the /admin account)
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      AUTH_SECRET: "${AUTH_SECRET:-}"
+      # Media storage: local (default, on the /data volume) or s3.
+      # For S3/MinIO set STORAGE=s3 and the S3_* variables below.
+      STORAGE: "${STORAGE:-local}"
+      MEDIA_DIR: "/data/media"
+      S3_ENDPOINT: "${S3_ENDPOINT:-}"
+      S3_BUCKET: "${S3_BUCKET:-}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY:-}"
+      S3_REGION: "${S3_REGION:-us-east-1}"
+      S3_USE_SSL: "${S3_USE_SSL:-false}"
+      S3_PUBLIC_URL: "${S3_PUBLIC_URL:-}"
     volumes:
       - naturieux-data:/data
     restart: unless-stopped

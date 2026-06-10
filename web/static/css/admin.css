@@ -118,6 +118,45 @@
     gap: 10px;
 }
 
+.source-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.toggle-btn {
+    flex: 1;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    padding: 10px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.toggle-btn.active {
+    border-color: var(--primary);
+    color: var(--text-primary);
+}
+
+.upload-zone {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+}
+
+.upload-preview {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: var(--radius);
+    align-self: center;
+}
+
 .danger-btn {
     background: transparent;
     color: var(--danger);
