@@ -21,9 +21,16 @@
 - [ ] **Filtres avancés** : choix du groupe taxonomique (oiseaux, mammifères, plantes, champignons…), du lieu (région/département), de la saison.
 - [ ] **Affichage des achievements et niveaux** dans l'UI (le domaine gamification existe déjà).
 
+## Source de données TAXREF (indépendance iNaturalist)
+
+- [x] **Référentiel TAXREF local** : `internal/adapters/taxref` (dépôt SQLite implémentant `ports.SpeciesRepository`). Importeur Darwin Core (`cmd/importtaxref`), 212k espèces valides chargées en ~2,7 s. Sélectionnable par `SPECIES_SOURCE=taxref`. Voir [05 — TAXREF & photos](05-taxref-et-photos.md).
+- [x] **Photos « à nous »** : table `taxref_photos` liée par `cd_nom`, alimentée par notre propre collection (`Repository.AddPhoto`). Plus de dépendance iNaturalist pour les images en mode taxref.
+- [ ] **Outil d'import des photos maison** : commande pour charger en masse notre collection (CSV cd_nom→url/attribution/licence) dans `taxref_photos`.
+- [ ] **Présence métropole** : la version GBIF de TAXREF ne porte pas la colonne de présence territoriale (`FR`) ; pour filtrer strictement la métropole, croiser avec l'extrait INPN ou les statuts. Actuellement tous les taxons valides sont inclus.
+
 ## P2 — Améliorations
 
-- [ ] **Migration API v2 iNaturalist** : sélection de champs (`fields`), UUID — la v1 fonctionne mais la v2 est la version pérenne.
+- [ ] **Migration API v2 iNaturalist** : sélection de champs (`fields`), UUID — la v1 fonctionne mais la v2 est la version pérenne (pertinent seulement si on garde iNaturalist en source d'appoint).
 - [ ] **Tests E2E frontend** automatisés (Playwright) intégrés à la CI.
 - [ ] **WebSocket** : mode duel / multijoueur en temps réel.
 - [ ] **Mode révision** : revoir les espèces ratées (répétition espacée).
@@ -32,7 +39,7 @@
 
 ## P3 — Déploiement
 
-- [ ] **Conteneurisation** : Dockerfile multi-stage (binaire statique Go).
+- [x] **Conteneurisation** : Dockerfile multi-stage (binaire statique CGO-free sur alpine, non-root, healthcheck `/health`, volume `/data` pour la base) + `docker-compose.yml`. `docker compose up` lance l'app.
 - [ ] **Hébergement naturieux.fr** : reverse proxy + TLS, variable `PORT`, logs.
 - [ ] **Page mentions légales** : crédits iNaturalist, licences des médias, politique de confidentialité.
 - [ ] **Monitoring** : métriques basiques (sessions/jour, taux d'erreur API iNaturalist).
