@@ -11,7 +11,7 @@
 
 ## P1 — Important (expérience de jeu)
 
-- [ ] **Comptes utilisateurs simples** : pseudo + identifiant local (pas d'OAuth dans un premier temps), remplacement du joueur « demo ».
+- [x] **Comptes utilisateurs simples** : `POST /api/v1/players` (pseudo unique 2-20 caractères) + `GET /api/v1/players/{id}`, identifiant conservé en localStorage, formulaire de bienvenue au premier lancement. Le serveur est la source de vérité de l'XP/niveaux. Évolution possible : récupération de compte (code secret ou e-mail).
 - [x] **Leaderboard** : endpoint `GET /api/v1/leaderboard` (classement par XP, paramètre `limit`) + écran frontend (médailles top 3, niveau, parties, précision). Évolution possible : classement par taxon ou par période.
 - [ ] **Quiz types restants côté frontend** :
   - Flash : déjà côté API (durée d'affichage), finaliser l'UI.
