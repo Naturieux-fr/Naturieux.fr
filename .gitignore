@@ -23,6 +23,11 @@ coverage.html
 # Locally uploaded media
 /media/
 
+# Photo-import working files (collections + mapping CSV) — never committed
+*.zip
+BDD_*.csv
+photos-*/
+
 # Dependency directories
 vendor/
 
