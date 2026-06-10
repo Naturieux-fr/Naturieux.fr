@@ -114,8 +114,10 @@ func main() {
 		http.ServeFile(w, r, "web/admin.html")
 	})
 
-	// Locally stored uploads are served by the app; S3/MinIO serves its own.
+	// Locally stored uploads are read by the quiz-image proxy (the raw /media
+	// path is not exposed to players; only the admin file server uses it).
 	if local, ok := mediaStore.(*storage.Local); ok {
+		handler.SetLocalMediaDir(local.Dir())
 		mux.Handle("/media/", http.StripPrefix("/media/", http.FileServer(http.Dir(local.Dir()))))
 	}
 
@@ -194,8 +196,18 @@ func corsMiddleware(next http.Handler) http.Handler {
 // the DEV_MODE and SPECIES_SOURCE environment variables.
 func buildSpeciesRepo(ctx context.Context, db *sql.DB, devMode bool) (ports.SpeciesRepository, error) {
 	source := os.Getenv("SPECIES_SOURCE")
-	if devMode && source == "" {
-		source = "mock"
+	if source == "" {
+		// Auto-detect: demo data in dev mode, otherwise the local TAXREF as
+		// soon as it is loaded, and only fall back to iNaturalist when there
+		// is no local reference yet.
+		switch {
+		case devMode:
+			source = "mock"
+		case taxrefLoaded(db):
+			source = "taxref"
+		default:
+			source = "inat"
+		}
 	}
 
 	switch source {
@@ -229,6 +241,15 @@ func buildSpeciesRepo(ctx context.Context, db *sql.DB, devMode bool) (ports.Spec
 		go speciesCache.StartAutoWarm(ctx, cache.DefaultWarmInterval, cache.WarmTaxa, cache.DefaultWarmTarget)
 		return speciesCache, nil
 	}
+}
+
+// taxrefLoaded reports whether a populated TAXREF reference is present.
+func taxrefLoaded(db *sql.DB) bool {
+	if err := taxref.EnsureSchema(db); err != nil {
+		return false
+	}
+	count, err := taxref.NewRepository(db).CountSpecies(context.Background())
+	return err == nil && count > 0
 }
 
 // authSecret returns the token-signing secret from AUTH_SECRET, or a random

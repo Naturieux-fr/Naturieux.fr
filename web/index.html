@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
-    <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=2.1">
+    <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
     <!-- Atmosphere: paper grain + vignette -->
@@ -156,6 +156,7 @@
                     <div class="mount-frame">
                         <img :src="question.mediaUrl || null" alt="Spécimen à identifier"
                              x-show="question.mediaUrl" @load="onImageLoad()" @error="onImageError()"
+                             @contextmenu.prevent @dragstart.prevent draggable="false"
                              :class="{ loaded: imageLoaded }">
                         <div class="mount-loading" x-show="!imageLoaded">
                             <div class="spinner big"></div>
@@ -275,6 +276,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=2.1"></script>
+    <script src="/static/js/app.js?v=2.2"></script>
 </body>
 </html>

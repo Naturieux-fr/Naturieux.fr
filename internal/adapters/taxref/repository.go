@@ -205,6 +205,7 @@ func (r *Repository) GetSimilar(ctx context.Context, speciesID int, limit int) (
 				WHEN family = ? THEN 2
 				ELSE 3
 			END,
+			CASE WHEN fr IN ('P', 'E', 'S', 'I') THEN 0 ELSE 1 END,
 			RANDOM()
 		LIMIT ?`,
 		speciesID, nonEmpty(genus), nonEmpty(family), nonEmpty(ordre),
@@ -374,16 +375,21 @@ func (r *Repository) ListPhotos(ctx context.Context, cdNom int) ([]PhotoRecord, 
 	return photos, rows.Err()
 }
 
-// DeletePhoto removes an owned photo by its id.
-func (r *Repository) DeletePhoto(ctx context.Context, id int) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM taxref_photos WHERE id = ?`, id)
+// DeletePhoto removes an owned photo by its id and returns its URL, so the
+// caller can also remove the stored file.
+func (r *Repository) DeletePhoto(ctx context.Context, id int) (string, error) {
+	var url string
+	err := r.db.QueryRowContext(ctx, `SELECT url FROM taxref_photos WHERE id = ?`, id).Scan(&url)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ports.ErrNotFound
+	}
 	if err != nil {
-		return fmt.Errorf("taxref delete photo: %w", err)
+		return "", fmt.Errorf("taxref delete photo: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ports.ErrNotFound
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM taxref_photos WHERE id = ?`, id); err != nil {
+		return "", fmt.Errorf("taxref delete photo: %w", err)
 	}
-	return nil
+	return url, nil
 }
 
 // CdNomByScientificName resolves an exact scientific name to its cd_nom.

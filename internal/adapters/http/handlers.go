@@ -4,8 +4,13 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
+	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
@@ -18,6 +23,7 @@ import (
 type Handler struct {
 	quizService *appquiz.Service
 	devMode     bool
+	mediaDir    string // local media directory, for serving owned photos
 }
 
 // NewHandler creates a new Handler.
@@ -26,6 +32,11 @@ func NewHandler(quizService *appquiz.Service, devMode bool) *Handler {
 		quizService: quizService,
 		devMode:     devMode,
 	}
+}
+
+// SetLocalMediaDir lets the quiz-image proxy read owned photos from disk.
+func (h *Handler) SetLocalMediaDir(dir string) {
+	h.mediaDir = dir
 }
 
 // Response represents a standard API response.
@@ -169,6 +180,9 @@ func (h *Handler) HandleStartSession(w http.ResponseWriter, r *http.Request) {
 		TotalQuestions: result.TotalQuestions,
 		Question:       questionToDTO(result.FirstQuestion),
 	}
+	// Serve the image through an opaque proxy so the real file/species URL
+	// never reaches the client.
+	response.Question.MediaURL = protectedImageURL(result.SessionID, result.FirstQuestion)
 
 	writeSuccess(w, response)
 }
@@ -222,6 +236,7 @@ func (h *Handler) HandleSubmitAnswer(w http.ResponseWriter, r *http.Request) {
 
 	if result.NextQuestion != nil {
 		dto := questionToDTO(result.NextQuestion)
+		dto.MediaURL = protectedImageURL(req.SessionID, result.NextQuestion)
 		response.NextQuestion = &dto
 	}
 
@@ -452,6 +467,85 @@ func (h *Handler) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// protectedImageURL returns the opaque proxy URL for a question's image, or
+// "" when the question has no media. The question id is appended so the
+// browser never reuses a cached response across questions.
+func protectedImageURL(sessionID string, q *quiz.Question) string {
+	if q == nil || q.MediaURL() == "" {
+		return ""
+	}
+	return "/api/v1/quiz/" + sessionID + "/image?n=" + url.QueryEscape(q.ID())
+}
+
+// HandleQuizImage streams the current question's image without exposing the
+// underlying file or species URL. It only serves while the session is in
+// progress, and only the current question, so the response cannot be replayed
+// to enumerate the collection.
+func (h *Handler) HandleQuizImage(w http.ResponseWriter, r *http.Request) {
+	session, err := h.quizService.GetSession(r.Context(), r.PathValue("session_id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if session.Status() != quiz.SessionInProgress {
+		http.NotFound(w, r)
+		return
+	}
+	q := session.CurrentQuestion()
+	if q == nil || q.MediaURL() == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if n := r.URL.Query().Get("n"); n != "" && n != q.ID() {
+		http.NotFound(w, r)
+		return
+	}
+	h.streamImage(w, r, q.MediaURL())
+}
+
+// streamImage proxies an image (a local owned photo or a remote CC URL) with
+// caching disabled, so the bytes are not retained by the browser.
+func (h *Handler) streamImage(w http.ResponseWriter, r *http.Request, mediaURL string) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+	w.Header().Set("Pragma", "no-cache")
+
+	if strings.HasPrefix(mediaURL, "/media/") {
+		if h.mediaDir == "" {
+			http.NotFound(w, r)
+			return
+		}
+		name := path.Base(mediaURL)
+		if name == "." || name == "/" || strings.Contains(name, "..") {
+			http.Error(w, "bad path", http.StatusBadRequest)
+			return
+		}
+		http.ServeFile(w, r, filepath.Join(h.mediaDir, name))
+		return
+	}
+
+	// Remote (e.g. iNaturalist / S3): proxy the bytes server-side.
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, mediaURL, nil)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	req.Header.Set("User-Agent", "Naturieux/1.0 (https://naturieux.fr)")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "image unavailable", http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "image unavailable", http.StatusBadGateway)
+		return
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	_, _ = io.Copy(w, resp.Body)
+}
+
 // RegisterRoutes registers all routes with the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.HandleHealthCheck)
@@ -462,4 +556,5 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/quiz/start", h.HandleStartSession)
 	mux.HandleFunc("/api/v1/quiz/answer", h.HandleSubmitAnswer)
 	mux.HandleFunc("/api/v1/quiz/abandon", h.HandleAbandonSession)
+	mux.HandleFunc("GET /api/v1/quiz/{session_id}/image", h.HandleQuizImage)
 }

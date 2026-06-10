@@ -277,7 +277,11 @@ body {
     position: relative; aspect-ratio: 4 / 3; overflow: hidden;
     background: var(--paper-2); display: grid; place-items: center;
 }
-.mount-frame img { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s ease; filter: saturate(.96) contrast(1.02); }
+.mount-frame img {
+    width: 100%; height: 100%; object-fit: cover; opacity: 0;
+    transition: opacity .6s ease; filter: saturate(.96) contrast(1.02);
+    -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none;
+}
 .mount-frame img.loaded { opacity: 1; }
 .mount-loading { position: absolute; inset: 0; display: grid; place-items: center; gap: 10px; align-content: center; color: var(--ink-3); font-style: italic; font-family: var(--serif); }
 .mount-caption { margin-top: 10px; text-align: right; font-style: italic; font-family: var(--serif); font-size: .76rem; color: var(--ink-3); }

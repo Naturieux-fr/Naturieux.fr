@@ -242,9 +242,13 @@ func TestQuestionFactory_CreateQuestion_FallbackToRandom(t *testing.T) {
 	}
 }
 
-func TestQuestionFactory_CreateQuestion_CrossTaxonFallback(t *testing.T) {
-	correct := createMockSpecies(1, "Lonely Taxon Species")
-	sameTaxonWrong := createMockSpecies(2, "Only Same Taxon Wrong")
+func TestQuestionFactory_CreateQuestion_NeverCrossesGroup(t *testing.T) {
+	// The correct species' group has only one other member; distractors must
+	// stay within the group (a frog never offered a snake), so the question
+	// ends up with fewer choices rather than borrowing from another group.
+	correct := createMockSpecies(1, "Lonely Group Species")
+	sameGroup := createMockSpecies(2, "Same Group Wrong")
+	otherGroup := createMockSpecies(99, "WRONG GROUP Species")
 
 	mockRepo := &mockSpeciesRepository{
 		getRandomFunc: func(ctx context.Context, filter ports.SpeciesFilter) ([]*species.Species, error) {
@@ -252,14 +256,10 @@ func TestQuestionFactory_CreateQuestion_CrossTaxonFallback(t *testing.T) {
 				return []*species.Species{correct}, nil
 			}
 			if filter.IconicTaxon != "" {
-				// Only one other species exists in the same taxon
-				return []*species.Species{sameTaxonWrong}, nil
+				return []*species.Species{sameGroup}, nil // only one same-group species
 			}
-			// Cross-taxon top-up provides the missing choices
-			return []*species.Species{
-				createMockSpecies(3, "Other Taxon 1"),
-				createMockSpecies(4, "Other Taxon 2"),
-			}, nil
+			// A cross-group query would return otherGroup — it must never run.
+			return []*species.Species{otherGroup}, nil
 		},
 		getSimilarFunc: func(ctx context.Context, speciesID int, limit int) ([]*species.Species, error) {
 			return nil, errors.New("no similar species")
@@ -270,12 +270,18 @@ func TestQuestionFactory_CreateQuestion_CrossTaxonFallback(t *testing.T) {
 
 	question, err := factory.CreateQuestion(context.Background(), quiz.ImageQuiz, quiz.Beginner, "")
 	if err != nil {
-		t.Fatalf("CreateQuestion() should top up choices across taxa, got error = %v", err)
+		t.Fatalf("CreateQuestion() error = %v", err)
 	}
 
-	// Beginner needs 4 choices: correct + 1 same-taxon + 2 cross-taxon
-	if len(question.Choices()) != 4 {
-		t.Errorf("Choices count = %d, want 4 (cross-taxon top-up)", len(question.Choices()))
+	// correct + the single same-group distractor = 2 choices, and the
+	// out-of-group species must be absent.
+	if len(question.Choices()) != 2 {
+		t.Errorf("Choices count = %d, want 2 (same group only, no cross-group fill)", len(question.Choices()))
+	}
+	for _, c := range question.Choices() {
+		if c.Species.ID() == 99 {
+			t.Error("a cross-group species was offered as a distractor")
+		}
 	}
 }
 

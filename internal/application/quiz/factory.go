@@ -142,10 +142,15 @@ func (f *questionFactory) CreateQuestion(
 	return question, nil
 }
 
-// Minimum number of choices required for a valid question.
-const minChoicesRequired = 2
+// minDistractors is the fewest wrong answers a question can have: a question
+// needs at least the correct answer plus one distractor.
+const minDistractors = 1
 
-// getWrongChoices retrieves species to use as incorrect answers.
+// getWrongChoices retrieves species to use as incorrect answers. Distractors
+// are always taxonomically related to the correct species (same genus, then
+// family, then order, then group) and NEVER from another group — a frog quiz
+// must never offer a snake. When the group is too small to fill every slot,
+// the question simply has fewer choices.
 func (f *questionFactory) getWrongChoices(
 	ctx context.Context,
 	correct *species.Species,
@@ -156,24 +161,16 @@ func (f *questionFactory) getWrongChoices(
 		return similar[:count], nil
 	}
 
+	// Top up with other species from the same group (same iconic taxon).
 	random, err := f.fetchRandomSpecies(ctx, correct, count)
 	if err != nil {
 		return nil, err
 	}
 
 	result := f.combineUniqueSpecies(correct.ID(), similar, random, count)
-	if len(result) < count {
-		// Not enough species in the same taxon: top up with any taxon so
-		// small groups can still produce a full set of choices.
-		anyTaxon, anyErr := f.fetchRandomAnyTaxon(ctx, correct, count)
-		if anyErr == nil {
-			result = f.combineUniqueSpecies(correct.ID(), result, anyTaxon, count)
-		}
+	if len(result) < minDistractors {
+		return nil, errors.New("not enough related species for choices")
 	}
-	if len(result) < minChoicesRequired {
-		return nil, errors.New("not enough species for choices")
-	}
-
 	return result, nil
 }
 
@@ -186,7 +183,10 @@ func (f *questionFactory) fetchSimilarSpecies(ctx context.Context, speciesID, co
 	return similar
 }
 
-// fetchRandomSpecies retrieves random species from the same taxon.
+// fetchRandomSpecies retrieves random species from the same group as the
+// correct answer. Distractors only display a name, so no photo is required —
+// this keeps the pool of plausible same-group wrong answers as wide as
+// possible.
 func (f *questionFactory) fetchRandomSpecies(
 	ctx context.Context,
 	correct *species.Species,
@@ -195,22 +195,7 @@ func (f *questionFactory) fetchRandomSpecies(
 	filter := ports.SpeciesFilter{
 		IconicTaxon: correct.IconicTaxon(),
 		Limit:       count + 5,
-		HasPhotos:   true,
 		ExcludeIDs:  []int{correct.ID()},
-	}
-	return f.speciesRepo.GetRandom(ctx, filter)
-}
-
-// fetchRandomAnyTaxon retrieves random species regardless of taxon.
-func (f *questionFactory) fetchRandomAnyTaxon(
-	ctx context.Context,
-	correct *species.Species,
-	count int,
-) ([]*species.Species, error) {
-	filter := ports.SpeciesFilter{
-		Limit:      count + 5,
-		HasPhotos:  true,
-		ExcludeIDs: []int{correct.ID()},
 	}
 	return f.speciesRepo.GetRandom(ctx, filter)
 }

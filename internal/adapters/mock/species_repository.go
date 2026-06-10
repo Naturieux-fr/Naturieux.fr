@@ -183,8 +183,8 @@ func (r *SpeciesRepository) createSpecies(id int, name, commonName, iconicTaxon,
 		URL:         photoURL,
 		MediumURL:   photoURL,
 		LargeURL:    photoURL,
-		Attribution: "(c) iNaturalist community, some rights reserved (CC BY-NC)",
-		LicenseCode: "cc-by-nc",
+		Attribution: "(c) Données de démonstration",
+		LicenseCode: "cc-by",
 	})
 	return sp
 }

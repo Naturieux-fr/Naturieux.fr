@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -234,7 +235,7 @@ func (h *AdminHandler) handleDeletePhoto(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	err := h.photos.DeletePhoto(r.Context(), id)
+	url, err := h.photos.DeletePhoto(r.Context(), id)
 	if errors.Is(err, ports.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "photo not found")
 		return
@@ -242,6 +243,12 @@ func (h *AdminHandler) handleDeletePhoto(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// Remove the stored file too (no-op for external URLs).
+	if h.storage != nil {
+		if delErr := h.storage.Delete(r.Context(), url); delErr != nil {
+			log.Printf("admin: removing stored file %q: %v", url, delErr)
+		}
 	}
 	writeSuccess(w, map[string]string{"message": "deleted"})
 }

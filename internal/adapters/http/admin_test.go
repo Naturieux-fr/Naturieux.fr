@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,7 +35,7 @@ const adminSampleTAXREF = "CD_NOM\tCD_REF\tCD_TAXSUP\tRANG\tLB_NOM\tNOM_VERN\tRE
 
 // newAdminTest builds an admin handler backed by real SQLite + TAXREF, with a
 // seeded admin account, and returns the handler plus a valid token.
-func newAdminTest(t *testing.T) (*httphandler.AdminHandler, string) {
+func newAdminTest(t *testing.T) (*httphandler.AdminHandler, string, string) {
 	t.Helper()
 	db, err := sqlite.Open(filepath.Join(t.TempDir(), "admin.db"))
 	if err != nil {
@@ -54,7 +55,8 @@ func newAdminTest(t *testing.T) (*httphandler.AdminHandler, string) {
 	if err := authSvc.SeedAdmin(context.Background(), "boss", "passw0rd!"); err != nil {
 		t.Fatalf("SeedAdmin() error = %v", err)
 	}
-	store, err := storage.NewLocal(filepath.Join(t.TempDir(), "media"))
+	mediaDir := filepath.Join(t.TempDir(), "media")
+	store, err := storage.NewLocal(mediaDir)
 	if err != nil {
 		t.Fatalf("NewLocal() error = %v", err)
 	}
@@ -79,7 +81,7 @@ func newAdminTest(t *testing.T) (*httphandler.AdminHandler, string) {
 	if resp.Data.Token == "" {
 		t.Fatal("login returned empty token")
 	}
-	return handler, resp.Data.Token
+	return handler, resp.Data.Token, mediaDir
 }
 
 // serve runs one request through the admin routes.
@@ -92,7 +94,7 @@ func serve(h *httphandler.AdminHandler, req *http.Request) *httptest.ResponseRec
 }
 
 func TestAdmin_RejectsWithoutToken(t *testing.T) {
-	handler, _ := newAdminTest(t)
+	handler, _, _ := newAdminTest(t)
 
 	rec := serve(handler, httptest.NewRequest(http.MethodGet, "/api/v1/admin/taxa?q=fox", nil))
 	if rec.Code != http.StatusUnauthorized {
@@ -108,7 +110,7 @@ func TestAdmin_RejectsWithoutToken(t *testing.T) {
 }
 
 func TestAdmin_Login_WrongPassword(t *testing.T) {
-	handler, _ := newAdminTest(t)
+	handler, _, _ := newAdminTest(t)
 	body, _ := json.Marshal(map[string]string{"username": "boss", "password": "nope"})
 	rec := serve(handler, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body)))
 	if rec.Code != http.StatusUnauthorized {
@@ -117,7 +119,7 @@ func TestAdmin_Login_WrongPassword(t *testing.T) {
 }
 
 func TestAdmin_PhotoLifecycle(t *testing.T) {
-	handler, token := newAdminTest(t)
+	handler, token, _ := newAdminTest(t)
 	auth := func(req *http.Request) *http.Request {
 		req.Header.Set("Authorization", "Bearer "+token)
 		return req
@@ -193,7 +195,7 @@ func TestAdmin_PhotoLifecycle(t *testing.T) {
 }
 
 func TestAdmin_UploadPhoto(t *testing.T) {
-	handler, token := newAdminTest(t)
+	handler, token, _ := newAdminTest(t)
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -234,7 +236,7 @@ func TestAdmin_UploadPhoto(t *testing.T) {
 }
 
 func TestAdmin_UploadPhoto_RejectsNonImage(t *testing.T) {
-	handler, token := newAdminTest(t)
+	handler, token, _ := newAdminTest(t)
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -255,4 +257,46 @@ func TestAdmin_UploadPhoto_RejectsNonImage(t *testing.T) {
 func withToken(req *http.Request, token string) *http.Request {
 	req.Header.Set("Authorization", "Bearer "+token)
 	return req
+}
+
+func TestAdmin_DeletePhoto_RemovesStoredFile(t *testing.T) {
+	handler, token, mediaDir := newAdminTest(t)
+	auth := func(req *http.Request) *http.Request {
+		req.Header.Set("Authorization", "Bearer "+token)
+		return req
+	}
+
+	// Upload a file for the fox.
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, _ := mw.CreateFormFile("file", "fox.png")
+	_, _ = part.Write(pngBytes)
+	_ = mw.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/taxa/60585/upload", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := serve(handler, auth(req))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d, want 200", rec.Code)
+	}
+	var up struct {
+		Data struct {
+			ID  int    `json:"id"`
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&up)
+
+	stored := filepath.Join(mediaDir, strings.TrimPrefix(up.Data.URL, "/media/"))
+	if _, err := os.Stat(stored); err != nil {
+		t.Fatalf("uploaded file should exist on disk: %v", err)
+	}
+
+	// Deleting the photo must remove the stored file too.
+	rec = serve(handler, auth(httptest.NewRequest(http.MethodDelete, "/api/v1/admin/photos/"+strconv.Itoa(up.Data.ID), nil)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200", rec.Code)
+	}
+	if _, err := os.Stat(stored); !os.IsNotExist(err) {
+		t.Errorf("stored file should be gone after delete, stat err = %v", err)
+	}
 }

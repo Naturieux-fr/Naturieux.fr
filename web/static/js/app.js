@@ -269,20 +269,36 @@ function quizApp() {
             }
         },
 
-        // Load question
+        // Load question. The image is fetched as a blob and shown via an
+        // object URL, so the underlying file URL is never exposed on the <img>
+        // element (no right-click "copy image address", no plain path in the
+        // network tab — only the opaque proxy request).
         loadQuestion(q) {
             this.imageLoaded = false;
             this.timerPaused = true; // Pause timer until image loads
             this.question = {
                 id: q.id,
-                mediaUrl: q.media_url,
+                mediaUrl: '',
                 mediaAttribution: q.media_attribution || '',
                 choices: q.choices || []
             };
             this.selectedAnswer = null;
             this.showFeedback = false;
             this.timer = this.timeLimit;
-            // startTime will be set when image loads
+
+            if (this._imageObjectUrl) {
+                URL.revokeObjectURL(this._imageObjectUrl);
+                this._imageObjectUrl = '';
+            }
+            if (q.media_url) {
+                fetch(q.media_url, { cache: 'no-store' })
+                    .then(res => res.ok ? res.blob() : Promise.reject(res.status))
+                    .then(blob => {
+                        this._imageObjectUrl = URL.createObjectURL(blob);
+                        this.question.mediaUrl = this._imageObjectUrl;
+                    })
+                    .catch(() => this.onImageError());
+            }
         },
 
         // Start timer

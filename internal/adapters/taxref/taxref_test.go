@@ -234,10 +234,10 @@ func TestRepository_ListAndDeletePhoto(t *testing.T) {
 		t.Errorf("AddPhoto(unknown taxon) error = %v, want ErrNotFound", err)
 	}
 
-	if err := repo.DeletePhoto(ctx, id); err != nil {
+	if _, err := repo.DeletePhoto(ctx, id); err != nil {
 		t.Fatalf("DeletePhoto() error = %v", err)
 	}
-	if err := repo.DeletePhoto(ctx, id); !errors.Is(err, ports.ErrNotFound) {
+	if _, err := repo.DeletePhoto(ctx, id); !errors.Is(err, ports.ErrNotFound) {
 		t.Errorf("DeletePhoto(twice) error = %v, want ErrNotFound", err)
 	}
 }
