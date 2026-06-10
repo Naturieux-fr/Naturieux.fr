@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -25,10 +26,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/storage"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/media"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
@@ -70,7 +73,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	var imported, unmatched, missing, skipped int
+	var imported, converted, unmatched, missing, skipped int
 
 	for _, row := range rows {
 		cdNom, err := repo.CdNomByScientificName(ctx, row.ScientificName)
@@ -84,32 +87,30 @@ func main() {
 		}
 
 		path := filepath.Join(*dir, row.Photo)
-		f, err := os.Open(path)
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			log.Printf("  ✗ fichier absent: %s", row.Photo)
 			missing++
 			continue
 		}
 
-		contentType, ok := detectImage(f)
+		contentType, body, fromRaw, ok := prepareImage(row.Photo, raw)
 		if !ok {
-			log.Printf("  ⊘ ignoré (pas une image web, ex. RAW): %s", row.Photo)
-			_ = f.Close()
+			log.Printf("  ⊘ ignoré (format non pris en charge): %s", row.Photo)
 			skipped++
 			continue
+		}
+		if fromRaw {
+			log.Printf("  ⟳ RAW converti en JPEG: %s", row.Photo)
+			converted++
 		}
 
 		if *dryRun {
 			imported++
-			_ = f.Close()
 			continue
 		}
 
-		if _, err := f.Seek(0, 0); err != nil {
-			log.Fatalf("seek %s: %v", row.Photo, err)
-		}
-		saved, err := store.Save(ctx, contentType, f)
-		_ = f.Close()
+		saved, err := store.Save(ctx, contentType, bytes.NewReader(body))
 		if err != nil {
 			log.Fatalf("storing %s: %v", row.Photo, err)
 		}
@@ -123,18 +124,24 @@ func main() {
 	if *dryRun {
 		verb = "would import"
 	}
-	log.Printf("Done: %d %s, %d unmatched names, %d missing files, %d skipped (non-image)",
-		imported, verb, unmatched, missing, skipped)
+	log.Printf("Done: %d %s (%d converted from RAW), %d unmatched names, %d missing files, %d skipped",
+		imported, verb, converted, unmatched, missing, skipped)
 }
 
-// detectImage sniffs the file's content type and reports whether it is a
-// supported web image.
-func detectImage(f *os.File) (string, bool) {
-	head := make([]byte, 512)
-	n, _ := f.Read(head)
-	contentType := http.DetectContentType(head[:n])
-	if _, err := storage.ExtensionFor(contentType); err != nil {
-		return "", false
+// prepareImage returns the content type and bytes to store for a photo. Web
+// images are passed through; RAW files are converted to their embedded JPEG
+// preview. fromRaw reports whether a conversion happened.
+func prepareImage(name string, data []byte) (contentType string, body []byte, fromRaw bool, ok bool) {
+	ct := http.DetectContentType(data)
+	if _, err := storage.ExtensionFor(ct); err == nil {
+		return ct, data, false, true
 	}
-	return contentType, true
+
+	ext := strings.ToLower(filepath.Ext(name))
+	if media.IsRawExtension(ext) {
+		if jpg, err := media.ExtractPreviewJPEG(data); err == nil {
+			return "image/jpeg", jpg, true, true
+		}
+	}
+	return "", nil, false, false
 }
