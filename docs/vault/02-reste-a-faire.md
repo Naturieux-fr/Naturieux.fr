@@ -25,7 +25,10 @@
 
 - [x] **Référentiel TAXREF local** : `internal/adapters/taxref` (dépôt SQLite implémentant `ports.SpeciesRepository`). Importeur Darwin Core (`cmd/importtaxref`), 212k espèces valides chargées en ~2,7 s. Sélectionnable par `SPECIES_SOURCE=taxref`. Voir [05 — TAXREF & photos](05-taxref-et-photos.md).
 - [x] **Photos « à nous »** : table `taxref_photos` liée par `cd_nom`, alimentée par notre propre collection (`Repository.AddPhoto`). Plus de dépendance iNaturalist pour les images en mode taxref.
-- [ ] **Outil d'import des photos maison** : commande pour charger en masse notre collection (CSV cd_nom→url/attribution/licence) dans `taxref_photos`.
+- [x] **Back-office admin des photos** : page `/admin` (auth par rôle, mots de passe bcrypt, jeton HMAC) pour chercher une espèce, ajouter/supprimer des photos liées par `cd_nom` et régler leur **difficulté** (utilisée par le tirage du quiz). Upload de fichier (stockage **local** ou **S3/MinIO** via `STORAGE`) ou URL externe. Admin seedé par `ADMIN_USERNAME`/`ADMIN_PASSWORD`.
+- [ ] **Import en masse des photos** : commande/écran pour charger une collection entière (CSV cd_nom→fichier/url) d'un coup, au lieu d'une par une.
+- [ ] **SRI sur les CDN** : ajouter `integrity`/`crossorigin` sur Alpine.js (index.html + admin.html) ou auto-héberger la lib.
+- [ ] **Nettoyage fichiers orphelins** : supprimer le fichier stocké quand on supprime une photo locale (aujourd'hui seul l'enregistrement part).
 - [ ] **Présence métropole** : la version GBIF de TAXREF ne porte pas la colonne de présence territoriale (`FR`) ; pour filtrer strictement la métropole, croiser avec l'extrait INPN ou les statuts. Actuellement tous les taxons valides sont inclus.
 
 ## P2 — Améliorations
