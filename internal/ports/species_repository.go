@@ -13,7 +13,6 @@ type SpeciesFilter struct {
 	PlaceID     int    // Filter by geographic location
 	Limit       int    // Maximum number of results
 	HasPhotos   bool   // Only species with photos
-	Quality     string // Quality grade (research, needs_id, casual)
 	ExcludeIDs  []int  // Species IDs to exclude
 	Difficulty  string // Preferred photo difficulty (sources that support it)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -212,8 +213,9 @@ func (s *Service) SubmitAnswer(
 	response := s.buildAnswerResponse(session, currentQuestion, answer)
 
 	if response.SessionComplete {
+		// Gamification is best-effort: a failure here must not fail the answer.
 		if err := s.handleSessionComplete(ctx, session); err != nil {
-			fmt.Printf("error handling session complete: %v\n", err)
+			log.Printf("quiz: handling session completion: %v", err)
 		}
 	}
 

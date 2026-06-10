@@ -5,138 +5,82 @@
 [![Security](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/security.yml/badge.svg)](https://github.com/Naturieux-fr/Naturieux.fr/actions/workflows/security.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Naturieux-fr/Naturieux.fr)](https://goreportcard.com/report/github.com/Naturieux-fr/Naturieux.fr)
 
-Quiz naturaliste gamifie utilisant l'API iNaturalist pour l'identification d'especes.
+Quiz d'identification d'espèces, gamifié, adossé au **référentiel taxonomique national TAXREF** et à une collection de photos maison. Interface « carnet de naturaliste » (Go + Alpine.js), base SQLite embarquée, déployable en un conteneur.
 
-## Fonctionnalites
+## Fonctionnalités
 
-- **Types de quiz varies**:
-  - `ImageQuiz` - Image complete visible
-  - `FlashQuiz` - Image visible brievement (1-3s)
-  - `PartialQuiz` - Partie de l'image visible
-  - `SilhouetteQuiz` - Silhouette uniquement
-  - `SoundQuiz` - Audio uniquement
-
-- **Niveaux de difficulte**:
-  - Debutant (4 choix, 30s)
-  - Intermediaire (6 choix, 20s)
-  - Expert (8 choix, 15s)
-  - Maitre (10 choix, 10s)
-
-- **Gamification**:
-  - Systeme de XP et niveaux
-  - Achievements/badges
-  - Streaks et bonus
-  - Leaderboard
+- **Quiz par image** : identifier l'espèce d'après une photo, avec des distracteurs taxonomiquement proches (même genre, puis famille, puis ordre) pour des questions réellement difficiles.
+- **Catégories françaises** issues de TAXREF (Mammifères, Oiseaux, Reptiles, Amphibiens, Insectes, Plantes, Champignons) et 4 niveaux d'épreuve (Apprenti → Maître).
+- **Comptes joueurs** : pseudo, progression (XP, niveaux, séries, achievements), classement au mérite.
+- **Back-office `/admin`** : recherche d'une espèce, gestion des photos par `cd_nom` et réglage de leur difficulté ; upload de fichier (stockage local ou S3/MinIO).
+- **Trois sources d'espèces** interchangeables : TAXREF local, API iNaturalist (avec cache), ou données de démonstration.
 
 ## Architecture
 
+Architecture hexagonale (ports & adapters) + DDD.
+
 ```
-naturieux/
-├── cmd/server/           # Point d'entree
-├── internal/
-│   ├── domain/           # Entites metier (DDD)
-│   │   ├── species/      # Espece, Taxon
-│   │   ├── quiz/         # Question, Session
-│   │   └── gamification/ # Score, Niveau, Achievement
-│   ├── ports/            # Interfaces (contrats)
-│   ├── adapters/         # Implementations
-│   │   ├── inaturalist/  # Client API iNaturalist
-│   │   └── http/         # Handlers HTTP
-│   └── application/      # Services applicatifs
-└── docs/                 # Documentation
+cmd/
+├── server/        # serveur HTTP
+├── importtaxref/  # import du référentiel TAXREF
+└── importphotos/  # import en masse d'une collection de photos
+internal/
+├── domain/        # entités métier (species, quiz, gamification)
+├── ports/         # interfaces (contrats)
+├── application/   # services (quiz, admin)
+├── adapters/      # taxref, inaturalist, cache, sqlite, storage, http
+├── auth/          # mots de passe (bcrypt) + jetons de session
+└── media/         # conversion RAW → JPEG
+web/               # frontend (HTML/CSS/Alpine.js)
+docs/vault/        # base de connaissances (état, roadmap, faisabilité, normes)
 ```
 
-### Design Patterns
-
-- **Repository Pattern** - Abstraction de l'acces aux donnees
-- **Factory Pattern** - Creation des differents types de quiz
-- **Strategy Pattern** - Strategies de difficulte
-- **Builder Pattern** - Construction de sessions de quiz
-- **Observer Pattern** - Notifications de gamification
-
-## Installation
+## Démarrage rapide
 
 ```bash
-# Cloner le projet
-git clone https://github.com/Naturieux-fr/Naturieux.fr.git
-cd Naturieux.fr
-
-# Installer les dependances
-go mod download
-
-# Lancer les tests
+go run ./cmd/server          # source par défaut : iNaturalist + cache
+DEV_MODE=1 go run ./cmd/server  # données de démonstration (sans réseau)
 go test ./... -cover
-
-# Compiler
-go build -o bin/server ./cmd/server
-
-# Lancer le serveur
-./bin/server
 ```
 
-## API
-
-### Demarrer une session
+### Mode TAXREF (recommandé)
 
 ```bash
-POST /api/v1/quiz/start
-Content-Type: application/json
-
-{
-  "user_id": "demo",
-  "difficulty": "beginner",
-  "quiz_types": ["image"],
-  "taxon_filter": "Mammalia",
-  "question_count": 10
-}
+# 1. Référentiel TAXREF natif (Licence Ouverte) — fichier TAXREFvNN.txt
+go run ./cmd/importtaxref -file TAXREFv18.txt -version v18.0
+# 2. Collection de photos (CSV: photo;groupe_taxonomique;nom_scientifique)
+#    Les RAW (.RW2…) sont convertis en JPEG, les noms résolus en cd_nom.
+go run ./cmd/importphotos -csv collection.csv -dir ./photos -attribution "(c) Naturieux" -license cc-by
+# 3. Lancer
+SPECIES_SOURCE=taxref go run ./cmd/server
 ```
 
-### Soumettre une reponse
+### Docker
 
 ```bash
-POST /api/v1/quiz/answer
-Content-Type: application/json
-
-{
-  "session_id": "abc123",
-  "species_id": 42069,
-  "time_taken_ms": 5000
-}
+docker compose up --build       # http://localhost:8080
 ```
 
-### Health check
+`docker-compose.yml` documente toutes les variables : `SPECIES_SOURCE`, `STORAGE` (local|s3) et `S3_*`, `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `AUTH_SECRET`.
 
-```bash
-GET /health
-```
+## API (extrait)
 
-## Couverture de Tests
+| Méthode | Route | Rôle |
+|---|---|---|
+| POST | `/api/v1/players` | inscription (pseudo) |
+| GET | `/api/v1/players/{id}` | profil |
+| POST | `/api/v1/quiz/start` | démarrer une partie |
+| POST | `/api/v1/quiz/answer` | répondre |
+| GET | `/api/v1/leaderboard` | classement |
+| POST | `/api/v1/auth/login` | connexion admin |
+| GET | `/health` | sonde de santé |
 
-| Module | Couverture |
-|--------|------------|
-| species | 100% |
-| inaturalist | 92.7% |
-| gamification | 81% |
-| application/quiz | 81.9% |
-| quiz domain | 77.5% |
-| http handlers | 60.5% |
-| **Total** | **73.8%** |
+## Sources & licences
 
-## API iNaturalist
+- **TAXREF** v18 (INPN / PatriNat — OFB-MNHN-CNRS-IRD), Licence Ouverte / CC-BY.
+- **Photos** : collection propre, ou sources Creative Commons via iNaturalist (filtrage `photo_license`, attribution conservée).
 
-Ce projet utilise l'[API iNaturalist](https://api.inaturalist.org/v1/docs/) pour recuperer les donnees sur les especes.
-
-### Limites
-
-- ~1 requete/seconde
-- ~10,000 requetes/jour
-- User-Agent requis
-
-### Endpoints utilises
-
-- `GET /observations` - Observations avec photos
-- `GET /taxa` - Recherche de taxons
-- `GET /taxa/autocomplete` - Autocompletion
+Détails et étude de faisabilité dans [`docs/vault`](docs/vault).
 
 ## Licence
 

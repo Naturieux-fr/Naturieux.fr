@@ -27,7 +27,7 @@ func makeJPEG(t *testing.T, w, h int) []byte {
 }
 
 func TestExtractPreviewJPEG_PicksLargest(t *testing.T) {
-	thumb := makeJPEG(t, 16, 12)   // small embedded thumbnail
+	thumb := makeJPEG(t, 16, 12)     // small embedded thumbnail
 	preview := makeJPEG(t, 320, 240) // full-size preview
 
 	// A fake RAW: TIFF-ish header bytes, the thumbnail, padding, the preview.

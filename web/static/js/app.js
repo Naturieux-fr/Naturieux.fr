@@ -382,14 +382,6 @@ function quizApp() {
             this.screen = 'results';
         },
 
-        // Get trophy based on accuracy
-        getTrophy() {
-            if (this.accuracy >= 90) return '🏆';
-            if (this.accuracy >= 70) return '🥈';
-            if (this.accuracy >= 50) return '🥉';
-            return '🎯';
-        },
-
         // Play again with same settings
         playAgain() {
             this.startGame();

@@ -29,6 +29,7 @@
 - [ ] **Import en masse des photos** : commande/écran pour charger une collection entière (CSV cd_nom→fichier/url) d'un coup, au lieu d'une par une.
 - [ ] **SRI sur les CDN** : ajouter `integrity`/`crossorigin` sur Alpine.js (index.html + admin.html) ou auto-héberger la lib.
 - [ ] **Nettoyage fichiers orphelins** : supprimer le fichier stocké quand on supprime une photo locale (aujourd'hui seul l'enregistrement part).
+- [x] **Conversion RAW → JPEG** : `internal/media` extrait l'aperçu JPEG pleine taille embarqué dans les RAW (.RW2…) en Go pur, sans dépendance externe ; `cmd/importphotos` convertit à la volée (4 `.RW2` → JPEG 1920×1440).
 - [ ] **Présence métropole** : la version GBIF de TAXREF ne porte pas la colonne de présence territoriale (`FR`) ; pour filtrer strictement la métropole, croiser avec l'extrait INPN ou les statuts. Actuellement tous les taxons valides sont inclus.
 
 ## P2 — Améliorations
