@@ -450,6 +450,9 @@ body {
 .live-pill.lead { border-color: var(--ochre); box-shadow: inset 0 0 0 1px var(--ochre); }
 .live-pill.me { border-color: var(--forest); }
 .live-pill.out { opacity: .5; text-decoration: line-through; }
+.live-pill.ready { border-color: var(--moss); box-shadow: inset 0 0 0 1px var(--moss); }
+.verdict-wait { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 8px; }
+.verdict-wait p { font-family: var(--serif); font-style: italic; color: var(--ink-3); }
 .podium-row.out { opacity: .55; }
 .live-rank { font-family: var(--serif); font-weight: 600; color: var(--rust); }
 .live-name { font-weight: 600; color: var(--forest-2); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

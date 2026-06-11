@@ -14,8 +14,9 @@ function quizApp() {
         inRoom: false,
         roomDone: false,
         joinCode: '',
-        room: { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' },
+        room: { code: '', status: '', players: [], total: 0, round: 0, hostId: '', mode: 'classic', answerMode: 'choices' },
         roomToken: '',
+        roomWaiting: false,
         roomSocket: null,
         _wsRetry: null,
         roomMode: 'classic',
@@ -528,13 +529,12 @@ function quizApp() {
         nextQuestion() {
             this.comboFlash = 0;
             if (this.inRoom) {
+                // In a duel the game advances automatically once everyone has
+                // answered; the only manual step is leaving to the podium once
+                // this player is out (eliminated) or the game is over.
                 if (this.roomDone) {
                     this.showFeedback = false;
-                    this.screen = 'mp-podium'; // live until everyone finishes
-                } else {
-                    this.currentQuestion++;
-                    this.showFeedback = false;
-                    this.loadQuestion(this.nextQuestionData);
+                    this.screen = 'mp-podium';
                 }
                 return;
             }
@@ -596,7 +596,10 @@ function quizApp() {
             this.error = '';
             this.joinCode = '';
             this.roomToken = '';
-            this.room = { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
+            this.inRoom = false;
+            this.roomDone = false;
+            this.roomWaiting = false;
+            this.room = { code: '', status: '', players: [], total: 0, round: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
             this.screen = 'mp-lobby';
         },
 
@@ -692,11 +695,19 @@ function quizApp() {
         applyRoomState(state, yourQuestion) {
             if (!state) return;
             const wasStatus = this.room.status;
+            const prevRound = this.room.round || 0;
             this.applyRoom(state);
 
-            if (this.room.status === 'playing' && wasStatus !== 'playing' && !this.inRoom) {
-                if (yourQuestion) this.beginRoomQuiz(yourQuestion);
-                else this.fetchMyQuestion();
+            if (this.room.status === 'playing') {
+                if (!this.inRoom) {
+                    // The game just started for me.
+                    if (yourQuestion) this.beginRoomQuiz(yourQuestion);
+                    else this.fetchMyQuestion();
+                } else if (this.room.round > prevRound && !this.roomDone) {
+                    // Everyone answered: advance to the next shared question.
+                    if (yourQuestion) this.loadRoomRound(yourQuestion);
+                    else this.fetchMyQuestion();
+                }
             }
             if (this.room.status === 'finished') {
                 this.stopRoomPolling();
@@ -708,8 +719,19 @@ function quizApp() {
         async fetchMyQuestion() {
             try {
                 const d = await this.api(`/rooms/${this.room.code}?player_id=${this.player.id}`, 'GET');
-                if (d.your_question) this.beginRoomQuiz(d.your_question);
+                if (!d.your_question) return;
+                if (!this.inRoom) this.beginRoomQuiz(d.your_question);
+                else this.loadRoomRound(d.your_question);
             } catch (e) {}
+        },
+
+        // Load the next shared round's question (clears the feedback/waiting).
+        loadRoomRound(question) {
+            this.showFeedback = false;
+            this.roomWaiting = false;
+            this.comboFlash = 0;
+            this.currentQuestion = (this.room.round || 0) + 1;
+            this.loadQuestion(question);
         },
 
         // Persist the active room so a reload can resume it.
@@ -748,6 +770,7 @@ function quizApp() {
             this.room.status = r.status;
             this.room.players = r.players || [];
             this.room.total = r.total_questions || 0;
+            this.room.round = r.round || 0;
             this.room.hostId = r.host_id;
             if (r.settings) {
                 this.room.mode = r.settings.mode || 'classic';
@@ -767,8 +790,9 @@ function quizApp() {
         beginRoomQuiz(question) {
             this.inRoom = true;
             this.roomDone = false;
+            this.roomWaiting = false;
             this.totalQuestions = this.room.total;
-            this.currentQuestion = 1;
+            this.currentQuestion = (this.room.round || 0) + 1;
             this.score = 0; this.streak = 0; this.bestStreak = 0; this.correctCount = 0; this.accuracy = 0;
             this.sessionComplete = false;
             this.setTimeLimit();
@@ -812,8 +836,8 @@ function quizApp() {
                     if (this.streak >= 3) this.comboFlash = this.streak;
                 }
                 this.roomDone = data.done;
+                this.roomWaiting = !!data.waiting;
                 this.sessionComplete = data.done;
-                if (data.next_question) this.nextQuestionData = data.next_question;
                 this.showFeedback = true;
             } catch (e) { this.error = e.message; }
         },
@@ -822,8 +846,11 @@ function quizApp() {
             this.stopRoomPolling();
             this.clearRoomSession();
             this.inRoom = false;
+            this.roomDone = false;
+            this.roomWaiting = false;
+            this.showFeedback = false;
             this.roomToken = '';
-            this.room = { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
+            this.room = { code: '', status: '', players: [], total: 0, round: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
             this.goHome();
         },
 

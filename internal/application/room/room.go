@@ -66,13 +66,14 @@ type player struct {
 	name       string
 	token      string // secret, required to act as this player
 	score      int
-	streak     int // current consecutive correct answers
-	best       int // best streak this game
-	correct    int // number of correct answers
-	index      int // index of the question to answer next
+	streak     int  // current consecutive correct answers
+	best       int  // best streak this game
+	correct    int  // number of correct answers
+	answers    int  // number of questions answered
+	answered   bool // has answered the current round
 	done       bool
 	eliminated bool      // knocked out in elimination mode
-	since      time.Time // when the current question was delivered (server-side timing)
+	since      time.Time // when the current round was delivered (server-side timing)
 	lastSeen   time.Time
 }
 
@@ -82,7 +83,8 @@ const streakBonusThreshold = 3
 // maxRoomQuestions caps a room's question count to bound work per room.
 const maxRoomQuestions = 30
 
-// Room is a single multiplayer game.
+// Room is a single multiplayer game. All players answer the same question
+// (round) and the game advances only once everyone has answered it.
 type Room struct {
 	mu        sync.Mutex
 	code      string
@@ -90,6 +92,7 @@ type Room struct {
 	settings  Settings
 	status    Status
 	questions []*quiz.Question
+	round     int // index of the question everyone is currently answering
 	players   []*player
 	created   time.Time
 	activity  time.Time
@@ -262,14 +265,14 @@ type AnswerResult struct {
 	Score            int
 	TotalScore       int
 	Streak           int
-	Done             bool
+	Done             bool // the game is over for this player (finished or eliminated)
 	Eliminated       bool
-	NextQuestion     *quiz.Question
+	Waiting          bool // answered, now waiting for the others this round
 }
 
-// Answer records, for the player identified by token, an answer to their
-// current question. Timing is measured server-side; the species id may be 0
-// (a deliberate "no answer", e.g. timeout or exhausted free-text attempts).
+// Answer records, for the player identified by token, an answer to the current
+// round's question. Timing is measured server-side; the species id may be 0 (a
+// deliberate "no answer", e.g. timeout or exhausted free-text attempts).
 func (m *Manager) Answer(code, token string, speciesID int) (*AnswerResult, error) {
 	r, err := m.Get(code)
 	if err != nil {
@@ -284,16 +287,16 @@ func (m *Manager) Answer(code, token string, speciesID int) (*AnswerResult, erro
 	if p == nil {
 		return nil, ErrPlayerUnknown
 	}
-	if p.done || p.index >= len(r.questions) {
+	if p.done || p.answered || r.round >= len(r.questions) {
 		return nil, ErrBadState
 	}
-	q := r.questions[p.index]
+	q := r.questions[r.round]
 	correct := q.CheckAnswer(speciesID)
 	return r.record(p, q, correct, m.now()), nil
 }
 
-// GuessName checks a free-text guess against the player's current question
-// without advancing it. It returns whether the guess is correct and, only when
+// GuessName checks a free-text guess against the current round's question
+// without recording it. It returns whether the guess is correct and, only when
 // correct, the species id so the caller can record the answer.
 func (m *Manager) GuessName(code, token, guess string) (bool, int, error) {
 	r, err := m.Get(code)
@@ -309,18 +312,18 @@ func (m *Manager) GuessName(code, token, guess string) (bool, int, error) {
 	if p == nil {
 		return false, 0, ErrPlayerUnknown
 	}
-	if p.done || p.index >= len(r.questions) {
+	if p.done || p.answered || r.round >= len(r.questions) {
 		return false, 0, ErrBadState
 	}
-	q := r.questions[p.index]
+	q := r.questions[r.round]
 	if q.CorrectSpecies().MatchesName(guess) {
 		return true, q.CorrectSpecies().ID(), nil
 	}
 	return false, 0, nil
 }
 
-// record scores a player's answer, advances them, applies elimination, and
-// finishes the room when everyone is done. Caller holds r.mu.
+// record scores a player's answer to the current round, then advances the whole
+// room once everyone has answered. Caller holds r.mu.
 func (r *Room) record(p *player, q *quiz.Question, correct bool, now time.Time) *AnswerResult {
 	r.touch(now)
 	taken := now.Sub(p.since)
@@ -343,16 +346,15 @@ func (r *Room) record(p *player, q *quiz.Question, correct bool, now time.Time) 
 	}
 
 	p.score += score
-	p.index++
-	p.since = now
-	if p.index >= len(r.questions) {
-		p.done = true
-	}
+	p.answers++
+	p.answered = true
 	// Sudden death: a wrong answer ends this player's game immediately.
 	if !correct && r.settings.Mode == Elimination {
 		p.eliminated = true
 		p.done = true
 	}
+
+	r.advanceIfRoundComplete(now)
 
 	res := &AnswerResult{
 		IsCorrect:        correct,
@@ -361,32 +363,53 @@ func (r *Room) record(p *player, q *quiz.Question, correct bool, now time.Time) 
 		Score:            score,
 		TotalScore:       p.score,
 		Streak:           p.streak,
-		Done:             p.done,
 		Eliminated:       p.eliminated,
+		Done:             p.eliminated || r.status == Done,
 	}
-	if !p.done {
-		res.NextQuestion = r.questions[p.index]
-	}
-	if r.allDone() {
-		r.status = Done
-	}
+	res.Waiting = !res.Done
 	r.broadcastLocked()
 	return res
 }
 
+// advanceIfRoundComplete moves the whole room to the next question once every
+// still-active player has answered the current round. Caller holds r.mu.
+func (r *Room) advanceIfRoundComplete(now time.Time) {
+	for _, p := range r.players {
+		if !p.done && !p.answered {
+			return // someone still has to answer
+		}
+	}
+	if r.allDone() {
+		r.status = Done
+		return
+	}
+	r.round++
+	if r.round >= len(r.questions) {
+		r.status = Done
+		return
+	}
+	for _, p := range r.players {
+		if !p.done {
+			p.answered = false
+			p.since = now
+		}
+	}
+}
+
 // PlayerState is a participant's public standing in a room.
 type PlayerState struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Score      int    `json:"score"`
-	Streak     int    `json:"streak"`
-	Best       int    `json:"best_streak"`
-	Correct    int    `json:"correct"`
-	Answered   int    `json:"answered"`
-	Done       bool   `json:"done"`
-	Eliminated bool   `json:"eliminated"`
-	Rank       int    `json:"rank"`
-	IsHost     bool   `json:"is_host"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Score       int    `json:"score"`
+	Streak      int    `json:"streak"`
+	Best        int    `json:"best_streak"`
+	Correct     int    `json:"correct"`
+	Answered    int    `json:"answered"`
+	HasAnswered bool   `json:"has_answered"` // answered the current round
+	Done        bool   `json:"done"`
+	Eliminated  bool   `json:"eliminated"`
+	Rank        int    `json:"rank"`
+	IsHost      bool   `json:"is_host"`
 }
 
 // State is a snapshot of a room for polling clients.
@@ -395,6 +418,7 @@ type State struct {
 	HostID   string        `json:"host_id"`
 	Status   Status        `json:"status"`
 	Total    int           `json:"total_questions"`
+	Round    int           `json:"round"` // current shared question index
 	Players  []PlayerState `json:"players"`
 	Settings StateSettings `json:"settings"`
 }
@@ -426,7 +450,8 @@ func (r *Room) snapshotLocked() State {
 	for i, p := range r.players {
 		players[i] = PlayerState{
 			ID: p.id, Name: p.name, Score: p.score, Streak: p.streak,
-			Best: p.best, Correct: p.correct, Answered: p.index, Done: p.done,
+			Best: p.best, Correct: p.correct, Answered: p.answers,
+			HasAnswered: p.answered, Done: p.done,
 			Eliminated: p.eliminated, IsHost: p.id == r.hostID,
 		}
 	}
@@ -447,6 +472,7 @@ func (r *Room) snapshotLocked() State {
 		HostID:  r.hostID,
 		Status:  r.status,
 		Total:   len(r.questions),
+		Round:   r.round,
 		Players: players,
 		Settings: StateSettings{
 			Difficulty:  string(r.settings.Difficulty),
@@ -534,10 +560,10 @@ func (m *Manager) CurrentQuestion(code, playerID string) (*quiz.Question, error)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p := r.find(playerID)
-	if p == nil || r.status != Playing || p.index >= len(r.questions) {
+	if p == nil || r.status != Playing || p.done || p.answered || r.round >= len(r.questions) {
 		return nil, ErrNotFound
 	}
-	return r.questions[p.index], nil
+	return r.questions[r.round], nil
 }
 
 // Cleanup removes rooms idle for longer than ttl. Call periodically.

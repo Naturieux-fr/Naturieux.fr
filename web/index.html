@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.8">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.9">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -295,10 +295,10 @@
             <!-- Classement en direct (multijoueur) -->
             <div class="live-board" x-show="inRoom">
                 <template x-for="p in room.players" :key="p.id">
-                    <div class="live-pill" :class="{ me: p.id === player.id, lead: p.rank === 1, out: p.eliminated }">
-                        <span class="live-rank" x-text="p.eliminated ? '✗' : p.rank"></span>
+                    <div class="live-pill" :class="{ me: p.id === player.id, lead: p.rank === 1, out: p.eliminated, ready: p.has_answered && !p.eliminated }">
+                        <span class="live-rank" x-text="p.eliminated ? '✗' : (p.has_answered ? '✓' : p.rank)"></span>
                         <span class="live-name" x-text="p.name"></span>
-                        <span class="live-prog" x-text="p.eliminated ? 'éliminé' : `${p.answered}/${room.total}`"></span>
+                        <span class="live-prog" x-text="p.eliminated ? 'éliminé' : (p.has_answered ? 'a répondu' : 'réfléchit…')"></span>
                         <span class="live-score" x-text="p.score"></span>
                     </div>
                 </template>
@@ -387,9 +387,20 @@
                     <h3 x-text="isCorrect ? 'Bien observé' : 'Détermination erronée'"></h3>
                     <p class="verdict-text" x-text="feedbackText"></p>
                     <div class="verdict-pts" x-show="isCorrect">+<span x-text="lastScore"></span> points</div>
-                    <button @click="nextQuestion()" class="btn btn-solid">
+
+                    <!-- Solo : bouton manuel -->
+                    <button x-show="!inRoom" @click="nextQuestion()" class="btn btn-solid">
                         <span x-text="sessionComplete ? 'Voir le bilan' : 'Planche suivante'"></span>
                     </button>
+
+                    <!-- Duel : avance automatique quand tout le monde a répondu -->
+                    <template x-if="inRoom && roomWaiting">
+                        <div class="verdict-wait">
+                            <span class="spinner"></span>
+                            <p x-text="`En attente des autres — ${room.players.filter(p=>p.has_answered||p.eliminated).length}/${room.players.length} ont répondu`"></p>
+                        </div>
+                    </template>
+                    <button x-show="inRoom && roomDone" @click="nextQuestion()" class="btn btn-solid">Voir le classement</button>
                 </div>
             </div>
         </section>
@@ -472,6 +483,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=2.8"></script>
+    <script src="/static/js/app.js?v=2.9"></script>
 </body>
 </html>

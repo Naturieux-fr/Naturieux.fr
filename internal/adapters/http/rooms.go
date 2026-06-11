@@ -183,11 +183,7 @@ func (h *RoomHandler) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		"streak":             res.Streak,
 		"done":               res.Done,
 		"eliminated":         res.Eliminated,
-	}
-	if res.NextQuestion != nil {
-		dto := questionToDTO(res.NextQuestion)
-		dto.MediaURL = h.roomImageURL(code, req.PlayerID, res.NextQuestion)
-		out["next_question"] = dto
+		"waiting":            res.Waiting,
 	}
 	writeSuccess(w, out)
 }

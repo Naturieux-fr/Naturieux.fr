@@ -62,3 +62,6 @@ logs/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# Local run data (TAXREF dump, photos, db)
+.run/
