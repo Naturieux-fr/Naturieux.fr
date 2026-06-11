@@ -19,6 +19,12 @@ function quizApp() {
         roomWaiting: false,
         roomSocket: null,
         _wsRetry: null,
+        // Défis du jour / de la semaine
+        inChallenge: false,
+        challengePeriod: '',
+        challenge: { key: '', leaderboard: [], yourBest: 0, played: false },
+        lastChallengeScore: null,
+
         roomMode: 'classic',
         roomModes: [
             { id: 'classic', name: 'Classique', desc: 'le meilleur score gagne' },
@@ -613,7 +619,8 @@ function quizApp() {
                 return;
             }
             if (this.sessionComplete) {
-                this.showResults();
+                if (this.inChallenge) { this.finishChallenge(); }
+                else { this.showResults(); }
             } else {
                 this.currentQuestion++;
                 this.loadQuestion(this.nextQuestionData);
@@ -662,6 +669,59 @@ function quizApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        // ---------- Défis du jour / de la semaine ----------
+
+        get challengeTitle() { return this.challengePeriod === 'weekly' ? 'Défi de la semaine' : 'Défi du jour'; },
+
+        async openChallenge(period) {
+            this.error = '';
+            this.challengePeriod = period;
+            this.lastChallengeScore = null;
+            await this.loadChallenge();
+            this.screen = 'challenge';
+        },
+
+        async loadChallenge() {
+            try {
+                const d = await this.api(`/challenge/${this.challengePeriod}?player_id=${this.player.id}`, 'GET');
+                this.challenge = {
+                    key: d.key, leaderboard: d.leaderboard || [],
+                    yourBest: d.your_best || 0, played: !!d.played
+                };
+            } catch (e) { this.error = e.message; }
+        },
+
+        async startChallenge() {
+            this.loading = true; this.error = '';
+            try {
+                const d = await this.api(`/challenge/${this.challengePeriod}/start`, 'POST', { user_id: this.player.id });
+                const s = d.start;
+                this.inChallenge = true;
+                this.sessionId = s.session_id;
+                this.totalQuestions = s.total_questions;
+                this.currentQuestion = 1;
+                this.score = 0; this.streak = 0; this.bestStreak = 0; this.correctCount = 0; this.accuracy = 0;
+                this.sessionComplete = false;
+                this.setTimeLimit();
+                this.loadQuestion(s.question);
+                this.screen = 'quiz';
+            } catch (e) { this.error = e.message; }
+            finally { this.loading = false; }
+        },
+
+        async finishChallenge() {
+            try {
+                const d = await this.api('/challenge/finish', 'POST', { session_id: this.sessionId });
+                this.lastChallengeScore = d.score;
+                this.challenge.leaderboard = d.leaderboard || [];
+                this.challenge.played = true;
+                this.challenge.yourBest = Math.max(this.challenge.yourBest, d.score);
+            } catch (e) { this.error = e.message; }
+            this.inChallenge = false;
+            this.showFeedback = false;
+            this.screen = 'challenge';
         },
 
         // ---------- Multijoueur ----------

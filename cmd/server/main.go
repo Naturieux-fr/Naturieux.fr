@@ -22,6 +22,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/application/account"
 	adminapp "github.com/Naturieux-fr/Naturieux.fr/internal/application/admin"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/application/challenge"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/application/room"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
@@ -122,6 +123,10 @@ func main() {
 	// Multiplayer rooms (in-memory, polled by clients; reclaimed when idle)
 	roomManager := room.NewManager(questionFactory)
 	adminHandler.SetAdminData(playerRepo, roomManager)
+
+	// Daily/weekly challenges (shared question set + dedicated leaderboard)
+	challengeManager := challenge.NewManager(questionFactory)
+	challengeHandler := httphandler.NewChallengeHandler(challengeManager, quizService, sqlite.NewChallengeRepository(db), playerRepo)
 	go reapRooms(backgroundCtx, roomManager)
 	roomHandler := httphandler.NewRoomHandler(roomManager, handler)
 
@@ -131,6 +136,7 @@ func main() {
 	adminHandler.RegisterRoutes(mux)
 	roomHandler.RegisterRoutes(mux)
 	accountHandler.RegisterRoutes(mux)
+	challengeHandler.RegisterRoutes(mux)
 
 	// Serve the admin page
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {

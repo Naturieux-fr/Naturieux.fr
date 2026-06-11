@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS invites (
 	revoked    INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS challenge_scores (
+	period     TEXT NOT NULL,
+	period_key TEXT NOT NULL,
+	player_id  TEXT NOT NULL,
+	username   TEXT NOT NULL,
+	score      INTEGER NOT NULL,
+	correct    INTEGER NOT NULL,
+	total      INTEGER NOT NULL,
+	played_at  TEXT NOT NULL,
+	PRIMARY KEY (period, period_key, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenge ON challenge_scores(period, period_key, score DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON quiz_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_players_xp ON players(total_xp DESC);
 `

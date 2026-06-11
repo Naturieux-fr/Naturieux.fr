@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3.2">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.3">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -184,6 +184,8 @@
                             <span x-show="!loading">Partir en herborisation</span>
                             <span x-show="loading" class="spinner"></span>
                         </button>
+                        <button @click="openChallenge('daily')" class="btn btn-quiet">⚡ Défi du jour</button>
+                        <button @click="openChallenge('weekly')" class="btn btn-quiet">📅 Défi de la semaine</button>
                         <button @click="openMulti()" class="btn btn-quiet">⚔ Duel entre naturalistes</button>
                         <button @click="openAchievements()" class="btn btn-quiet">Cabinet des hauts faits</button>
                         <button @click="showLeaderboard()" class="btn btn-quiet">Consulter le registre</button>
@@ -313,6 +315,45 @@
 
                 <div class="plate-actions">
                     <button @click="leaveRoom()" class="btn btn-solid btn-lg">Retour au carnet</button>
+                </div>
+            </article>
+        </section>
+
+        <!-- ============ DÉFI (jour / semaine) ============ -->
+        <section x-show="screen === 'challenge'" x-transition.opacity class="screen report">
+            <article class="plate report-plate reveal" style="--d:0">
+                <span class="plate-no" x-text="challengePeriod === 'weekly' ? 'Semaine' : 'Jour'"></span>
+                <div class="report-crest" aria-hidden="true">
+                    <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" class="seal-ring"/><circle cx="32" cy="32" r="24" class="seal-ring thin"/><path d="M32 48V26" class="stem"/><path d="M32 40c-7 0-11-4-11-11 7 0 11 4 11 11ZM32 35c5.5 0 9-3.5 9-9-5.5 0-9 3.5-9 9Z" class="leaf"/></svg>
+                </div>
+                <h2 class="report-title" x-text="challengeTitle"></h2>
+                <p class="plate-lead" x-text="challenge.key"></p>
+
+                <div class="combo-flash" x-show="lastChallengeScore !== null" style="position:static;transform:none;animation:none;margin:8px 0">
+                    <span x-text="`Ton score : ${lastChallengeScore} points`"></span>
+                </div>
+                <p class="plate-lead" x-show="challenge.played && lastChallengeScore === null" x-text="`Ton meilleur : ${challenge.yourBest} points`"></p>
+
+                <ol class="podium" x-show="challenge.leaderboard.length">
+                    <template x-for="e in challenge.leaderboard" :key="e.rank">
+                        <li class="podium-row" :class="{ me: e.username === player.name, gold: e.rank===1, silver: e.rank===2, bronze: e.rank===3 }">
+                            <span class="podium-rank" x-text="e.rank===1?'🥇':e.rank===2?'🥈':e.rank===3?'🥉':e.rank"></span>
+                            <span class="podium-name">
+                                <span x-text="e.username"></span>
+                                <small x-text="`${e.correct}/${e.total} bonnes`"></small>
+                            </span>
+                            <span class="podium-score" x-text="`${e.score} pts`"></span>
+                        </li>
+                    </template>
+                </ol>
+                <p class="empty-note" x-show="!challenge.leaderboard.length">Sois le premier à relever le défi !</p>
+
+                <div class="plate-actions">
+                    <button @click="startChallenge()" class="btn btn-solid btn-lg" :disabled="loading">
+                        <span x-show="!loading" x-text="challenge.played ? 'Rejouer le défi' : 'Relever le défi'"></span>
+                        <span x-show="loading" class="spinner"></span>
+                    </button>
+                    <button @click="goHome()" class="btn btn-quiet">Retour au carnet</button>
                 </div>
             </article>
         </section>
@@ -523,6 +564,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.1"></script>
+    <script src="/static/js/app.js?v=3.2"></script>
 </body>
 </html>
