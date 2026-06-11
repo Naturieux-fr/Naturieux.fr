@@ -52,9 +52,10 @@ l'**identité visuelle** (logo + favicon).
 
 ## Apprentissage & annotation (nouveau)
 
-- [~] **Section apprentissage / articles** : rôle **rédacteur** (`writer`) qui écrit des articles (descriptions d'espèces, comment différencier des espèces proches), liés aux espèces par `cd_nom`. **Bibliothèque** publique + **lien « En savoir plus »** affiché sur la bonne réponse en quiz (ou quand on se trompe) pour rediriger vers l'article pertinent. *(en cours)*
-- [ ] **Zones sur les images (multi-espèces)** : une photo peut contenir plusieurs espèces ; permettre de **tracer des zones** (rectangles) et d'y associer l'espèce présente (X ici, Y là) — utile pour l'annotation pédagogique et les photos multi-espèces.
-- [ ] **Zone de zoom (mode Détail)** : définir sur chaque photo la **zone utilisée pour le gros plan** du mode Détail (au lieu du recadrage aléatoire actuel), pour cibler une partie pertinente de l'image.
+- [x] **Section apprentissage / articles** : rôle **rédacteur** (`writer`, promu depuis l'admin) écrivant des articles liés aux espèces ; **Bibliothèque** publique + **lien « En savoir plus »** sur la bonne réponse en quiz. *(fait)*
+- [x] **Zones sur les images (multi-espèces)** : éditeur glisser-tracer dans l'admin pour associer une espèce à une zone (X ici, Y là). *(fait)*
+- [x] **Zone de zoom (mode Détail)** : zone par photo utilisée pour le gros plan, à la place du recadrage aléatoire. *(fait)*
+- [ ] **Exploiter les zones espèces en jeu** : exercice « où est l'espèce X ? » (cliquer la bonne zone) — piste future maintenant que les zones existent.
 
 ## P2 — Améliorations
 
