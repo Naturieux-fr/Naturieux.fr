@@ -76,7 +76,7 @@ func (r *PlayerRepository) DeletePlayer(ctx context.Context, id string) error {
 
 // SetRole changes a player's role ("player" or "admin").
 func (r *PlayerRepository) SetRole(ctx context.Context, id, role string) error {
-	if role != "player" && role != "admin" {
+	if role != "player" && role != "admin" && role != "writer" {
 		return fmt.Errorf("invalid role %q", role)
 	}
 	res, err := r.db.ExecContext(ctx, `UPDATE players SET role = ? WHERE id = ?`, role, id)

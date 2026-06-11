@@ -435,6 +435,25 @@ body {
 .ach-name { font-family: var(--serif); font-weight: 600; color: var(--forest-2); }
 .ach-desc { font-size: .74rem; color: var(--ink-3); }
 
+/* ============================ BIBLIOTHÈQUE ============================ */
+.article-list { list-style: none; margin: 18px 0; display: flex; flex-direction: column; gap: 8px; }
+.article-item {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 14px 16px; border: 1px solid var(--hair); background: var(--paper-3); cursor: pointer;
+}
+.article-item:hover { border-color: var(--moss); }
+.article-title { font-family: var(--serif); font-weight: 600; color: var(--forest-2); }
+.article-meta { font-size: .78rem; color: var(--ink-3); display: flex; align-items: center; gap: 8px; }
+.draft-tag { font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: var(--rust); border: 1px solid var(--rust); padding: 1px 6px; }
+.article-body { white-space: pre-wrap; text-align: left; line-height: 1.7; color: var(--ink-1); margin: 16px 0; }
+.article-byline { font-style: italic; color: var(--ink-3); text-align: right; }
+textarea.ink-field { resize: vertical; font-family: inherit; line-height: 1.6; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.sp-chip { font-size: .8rem; padding: 4px 10px; border: 1px solid var(--moss); color: var(--moss); cursor: pointer; }
+.sp-chip:hover { background: var(--moss); color: var(--paper-2); }
+.check-row { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--ink-2); }
+.verdict-learn { display: inline-block; margin: 8px 0; color: var(--ochre); cursor: pointer; text-decoration: underline; font-family: var(--serif); }
+
 /* ============================ TOASTS & SÉRIE ============================ */
 .toast-stack {
     position: fixed; top: 18px; right: 18px; z-index: 7000;

@@ -128,6 +128,23 @@ func (s *Service) Login(ctx context.Context, username, password string) (*gamifi
 	return player, auth.IssueToken(acc.ID, s.secret, sessionTTL, s.now()), nil
 }
 
+// Me resolves a session token to the player's id, username and role.
+func (s *Service) Me(ctx context.Context, token string) (id, username, role string, err error) {
+	id, err = s.Authenticate(token)
+	if err != nil {
+		return "", "", "", err
+	}
+	role, err = s.accounts.Role(ctx, id)
+	if err != nil {
+		return "", "", "", err
+	}
+	p, err := s.players.GetByID(ctx, id)
+	if err != nil {
+		return "", "", "", err
+	}
+	return id, p.Username(), role, nil
+}
+
 // Authenticate validates a session token and returns the player id.
 func (s *Service) Authenticate(token string) (string, error) {
 	id, err := auth.VerifyToken(token, s.secret, s.now())

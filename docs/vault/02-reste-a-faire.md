@@ -50,6 +50,12 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Sécurité** : jeton secret par joueur (anti-usurpation), timing serveur, nombre de questions plafonné.
 - [ ] **Évolutions** : mode spectateur, salons publics/liste, keep-alive WebSocket mobile.
 
+## Apprentissage & annotation (nouveau)
+
+- [~] **Section apprentissage / articles** : rôle **rédacteur** (`writer`) qui écrit des articles (descriptions d'espèces, comment différencier des espèces proches), liés aux espèces par `cd_nom`. **Bibliothèque** publique + **lien « En savoir plus »** affiché sur la bonne réponse en quiz (ou quand on se trompe) pour rediriger vers l'article pertinent. *(en cours)*
+- [ ] **Zones sur les images (multi-espèces)** : une photo peut contenir plusieurs espèces ; permettre de **tracer des zones** (rectangles) et d'y associer l'espèce présente (X ici, Y là) — utile pour l'annotation pédagogique et les photos multi-espèces.
+- [ ] **Zone de zoom (mode Détail)** : définir sur chaque photo la **zone utilisée pour le gros plan** du mode Détail (au lieu du recadrage aléatoire actuel), pour cibler une partie pertinente de l'image.
+
 ## P2 — Améliorations
 
 - [ ] **Quiz Son** (voir P1) — chants d'oiseaux Xeno-canto.

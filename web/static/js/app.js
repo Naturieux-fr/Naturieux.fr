@@ -49,8 +49,16 @@ function quizApp() {
             bestStreak: 0,
             dailyStreak: 0,
             achievements: [],
-            categoryCorrect: {}
+            categoryCorrect: {},
+            role: 'player'
         },
+
+        // Learning library
+        articles: [],
+        currentArticle: null,
+        relatedArticle: null,
+        articleEditor: { id: '', title: '', body: '', species: [], published: true },
+        articleSearch: { query: '', results: [] },
 
         // Tiered grades: a title per category, earned by correct answers.
         gradeTiers: [100, 500, 2000],
@@ -247,6 +255,7 @@ function quizApp() {
                 if (account.id) {
                     this.authToken = account.token || '';
                     await this.fetchPlayer(account.id);
+                    this.fetchMe();
                 }
             } catch (e) {
                 console.error('Error loading account:', e);
@@ -314,6 +323,7 @@ function quizApp() {
                 });
                 this.applyPlayer(data.player);
                 this.saveAccount(data.player.id, data.player.username, data.token);
+                this.fetchMe();
                 this.passwordInput = '';
             } catch (e) {
                 this.error = e.message;
@@ -332,6 +342,7 @@ function quizApp() {
                 const data = await this.api('/account/login', 'POST', { username, password: this.loginPassword });
                 this.applyPlayer(data.player);
                 this.saveAccount(data.player.id, data.player.username, data.token);
+                this.fetchMe();
                 this.loginPassword = '';
             } catch (e) {
                 this.error = e.message;
@@ -501,6 +512,7 @@ function quizApp() {
             this.guess = '';
             this.guessHint = '';
             this.attemptsLeft = this.maxAttempts;
+            this.relatedArticle = null;
 
             if (this._imageObjectUrl) {
                 URL.revokeObjectURL(this._imageObjectUrl);
@@ -585,6 +597,7 @@ function quizApp() {
 
                 this.isCorrect = data.is_correct;
                 this.correctAnswer = data.correct_species_id;
+                this.loadRelatedArticle(data.correct_species_id);
                 this.feedbackText = `C'etait: ${data.correct_name}`;
                 this.lastScore = data.score;
                 this.score = data.total_score;
@@ -676,6 +689,78 @@ function quizApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        // ---------- Bibliothèque / apprentissage ----------
+
+        get canWrite() { return this.player.role === 'writer' || this.player.role === 'admin'; },
+
+        async fetchMe() {
+            if (!this.authToken) return;
+            try { this.player.role = (await this.api('/account/me', 'GET')).role || 'player'; } catch (e) {}
+        },
+
+        // After an answer, surface a learning article about the correct species.
+        async loadRelatedArticle(cdNom) {
+            this.relatedArticle = null;
+            if (!cdNom) return;
+            try {
+                const arts = (await this.api(`/articles/by-species/${cdNom}`, 'GET')).articles || [];
+                if (arts.length) this.relatedArticle = arts[0];
+            } catch (e) {}
+        },
+
+        async openLibrary() {
+            this.error = '';
+            try { this.articles = (await this.api('/articles', 'GET')).articles || []; } catch (e) { this.error = e.message; }
+            this.screen = 'library';
+        },
+        async openArticle(id) {
+            try { this.currentArticle = (await this.api(`/articles/${id}`, 'GET')).article; this.screen = 'article'; }
+            catch (e) { this.error = e.message; }
+        },
+        backToLibrary() { this.currentArticle = null; this.openLibrary(); },
+
+        // Editor (writers/admins)
+        openEditor() {
+            this.articleEditor = { id: '', title: '', body: '', species: [], published: true };
+            this.articleSearch = { query: '', results: [] };
+            this.openLibrary().then(() => { this.screen = 'editor'; });
+        },
+        editArticle(a) {
+            this.articleEditor = { id: a.id, title: a.title, body: a.body, species: [...(a.species || [])], published: a.published };
+            this.screen = 'editor';
+        },
+        newArticle() {
+            this.articleEditor = { id: '', title: '', body: '', species: [], published: true };
+            this.articleSearch = { query: '', results: [] };
+        },
+        async searchArticleSpecies() {
+            if (!this.articleSearch.query.trim()) return;
+            try { this.articleSearch.results = (await this.api(`/admin/taxa?q=${encodeURIComponent(this.articleSearch.query)}`, 'GET')).taxa || []; }
+            catch (e) { this.error = e.message; }
+        },
+        addArticleSpecies(t) {
+            if (!this.articleEditor.species.some(s => s.cd_nom === t.cd_nom)) {
+                this.articleEditor.species.push({ cd_nom: t.cd_nom, name: t.scientific_name });
+            }
+        },
+        removeArticleSpecies(cd) { this.articleEditor.species = this.articleEditor.species.filter(s => s.cd_nom !== cd); },
+        async saveArticle() {
+            const e = this.articleEditor;
+            if (!e.title.trim() || !e.body.trim()) { this.error = 'Titre et contenu requis'; return; }
+            try {
+                const path = e.id ? `/articles/${e.id}` : '/articles';
+                await this.api(path, e.id ? 'PUT' : 'POST', { title: e.title, body: e.body, species: e.species, published: e.published });
+                await this.openLibrary();
+                this.screen = 'editor';
+                this.newArticle();
+            } catch (err) { this.error = err.message; }
+        },
+        async deleteArticle(id, title) {
+            if (!confirm(`Supprimer l'article « ${title} » ?`)) return;
+            try { await this.api(`/articles/${id}`, 'DELETE'); await this.openLibrary(); this.screen = 'editor'; }
+            catch (e) { this.error = e.message; }
         },
 
         // ---------- Défis du jour / de la semaine ----------
@@ -967,6 +1052,7 @@ function quizApp() {
                 });
                 this.isCorrect = data.is_correct;
                 this.correctAnswer = data.correct_species_id;
+                this.loadRelatedArticle(data.correct_species_id);
                 this.feedbackText = `C'etait: ${data.correct_name}`;
                 this.lastScore = data.score;
                 this.score = data.total_score;

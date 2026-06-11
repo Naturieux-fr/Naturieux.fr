@@ -22,6 +22,17 @@ func NewAccountHandler(accounts *account.Service) *AccountHandler {
 func (h *AccountHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/account/register", h.handleRegister)
 	mux.HandleFunc("POST /api/v1/account/login", h.handleLogin)
+	mux.HandleFunc("GET /api/v1/account/me", h.handleMe)
+}
+
+// handleMe returns the authenticated player's id, username and role.
+func (h *AccountHandler) handleMe(w http.ResponseWriter, r *http.Request) {
+	id, username, role, err := h.accounts.Me(r.Context(), bearerToken(r))
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "authentification requise")
+		return
+	}
+	writeSuccess(w, map[string]string{"id": id, "username": username, "role": role})
 }
 
 func (h *AccountHandler) handleRegister(w http.ResponseWriter, r *http.Request) {

@@ -63,6 +63,18 @@ CREATE TABLE IF NOT EXISTS challenge_scores (
 	PRIMARY KEY (period, period_key, player_id)
 );
 
+CREATE TABLE IF NOT EXISTS articles (
+	id          TEXT PRIMARY KEY,
+	title       TEXT NOT NULL,
+	body        TEXT NOT NULL,
+	species     TEXT NOT NULL DEFAULT '[]',
+	author_id   TEXT NOT NULL DEFAULT '',
+	author_name TEXT NOT NULL DEFAULT '',
+	published   INTEGER NOT NULL DEFAULT 1,
+	created_at  TEXT NOT NULL,
+	updated_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS curated_quizzes (
 	id         TEXT PRIMARY KEY,
 	name       TEXT NOT NULL,

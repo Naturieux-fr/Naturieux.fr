@@ -135,6 +135,9 @@ func main() {
 	go reapRooms(backgroundCtx, roomManager)
 	roomHandler := httphandler.NewRoomHandler(roomManager, handler)
 
+	// Learning library: articles authored by rédacteurs, read by everyone.
+	articleHandler := httphandler.NewArticleHandler(sqlite.NewArticleRepository(db), accountService)
+
 	// Create HTTP server
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -142,6 +145,7 @@ func main() {
 	roomHandler.RegisterRoutes(mux)
 	accountHandler.RegisterRoutes(mux)
 	challengeHandler.RegisterRoutes(mux)
+	articleHandler.RegisterRoutes(mux)
 
 	// Serve the admin page
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
