@@ -19,12 +19,16 @@ type ChallengeHandler struct {
 	quiz    *appquiz.Service
 	scores  *sqlite.ChallengeRepository
 	players ports.PlayerRepository
+	auth    Authenticator
 }
 
 // NewChallengeHandler creates the challenge API handler.
 func NewChallengeHandler(mgr *challenge.Manager, quiz *appquiz.Service, scores *sqlite.ChallengeRepository, players ports.PlayerRepository) *ChallengeHandler {
 	return &ChallengeHandler{mgr: mgr, quiz: quiz, scores: scores, players: players}
 }
+
+// SetAuthenticator enables player-token auth on challenge endpoints.
+func (h *ChallengeHandler) SetAuthenticator(a Authenticator) { h.auth = a }
 
 // RegisterRoutes wires the challenge endpoints.
 func (h *ChallengeHandler) RegisterRoutes(mux *http.ServeMux) {
@@ -68,6 +72,14 @@ func (h *ChallengeHandler) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if h.auth != nil {
+		pid, err := h.auth.Authenticate(bearerToken(r))
+		if err != nil || pid == "" {
+			writeError(w, http.StatusUnauthorized, "authentification requise")
+			return
+		}
+		req.UserID = pid
+	}
 
 	key, questions, err := h.mgr.Questions(r.Context(), period)
 	if err != nil {
@@ -107,6 +119,17 @@ func (h *ChallengeHandler) handleFinish(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		writeSessionError(w, err)
 		return
+	}
+	if h.auth != nil {
+		pid, err := h.auth.Authenticate(bearerToken(r))
+		if err != nil || pid == "" {
+			writeError(w, http.StatusUnauthorized, "authentification requise")
+			return
+		}
+		if session.UserID() != pid {
+			writeError(w, http.StatusForbidden, "session d'un autre joueur")
+			return
+		}
 	}
 
 	// Score is read server-side from the session, not trusted from the client.

@@ -116,6 +116,7 @@ func main() {
 	accountService := account.NewService(playerRepo, playerRepo, inviteRepo, secret, regMode)
 	accountHandler := httphandler.NewAccountHandler(accountService)
 	handler.SetRegistrationMode(string(regMode))
+	handler.SetAuthenticator(accountService) // gameplay endpoints derive the player from the session token
 	log.Printf("👤 Account registration: %s", regMode)
 
 	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo, mediaStore, accountService)
@@ -129,6 +130,7 @@ func main() {
 	curatedRepo := sqlite.NewCuratedRepository(db)
 	challengeManager := challenge.NewManager(questionFactory, curatedRepo)
 	challengeHandler := httphandler.NewChallengeHandler(challengeManager, quizService, sqlite.NewChallengeRepository(db), playerRepo)
+	challengeHandler.SetAuthenticator(accountService)
 	adminHandler.SetCuratedData(curatedRepo, challengeManager)
 	go reapRooms(backgroundCtx, roomManager)
 	roomHandler := httphandler.NewRoomHandler(roomManager, handler)

@@ -63,6 +63,7 @@ function quizApp() {
             { id: 'Plantae', title: 'Botaniste' },
             { id: 'Fungi', title: 'Mycologue' }
         ],
+        authToken: '',
         usernameInput: '',
         passwordInput: '',
         loginUsername: '',
@@ -244,6 +245,7 @@ function quizApp() {
             try {
                 const account = JSON.parse(saved);
                 if (account.id) {
+                    this.authToken = account.token || '';
                     await this.fetchPlayer(account.id);
                 }
             } catch (e) {
@@ -339,11 +341,13 @@ function quizApp() {
         },
 
         saveAccount(id, username, token) {
+            this.authToken = token || '';
             localStorage.setItem('naturieux_account', JSON.stringify({ id, username, token }));
         },
 
         logout() {
             localStorage.removeItem('naturieux_account');
+            this.authToken = '';
             this.clearRoomSession();
             this.player = { id: '', name: '', level: 1, xp: 0, xpNext: 100, xpPercent: 0, totalXp: 0, totalGames: 0, bestStreak: 0, dailyStreak: 0, achievements: [] };
             this.usernameInput = ''; this.passwordInput = ''; this.loginUsername = ''; this.loginPassword = '';
@@ -376,6 +380,9 @@ function quizApp() {
                     'Content-Type': 'application/json'
                 }
             };
+            if (this.authToken) {
+                options.headers['Authorization'] = 'Bearer ' + this.authToken;
+            }
             if (body) {
                 options.body = JSON.stringify(body);
             }

@@ -25,6 +25,7 @@ type Handler struct {
 	devMode          bool
 	mediaDir         string // local media directory, for serving owned photos
 	registrationMode string // "open" or "invite" (surfaced in /config)
+	auth             Authenticator
 }
 
 // SetRegistrationMode records the account registration policy for /config.
@@ -43,6 +44,48 @@ func NewHandler(quizService *appquiz.Service, devMode bool) *Handler {
 // SetLocalMediaDir lets the quiz-image proxy read owned photos from disk.
 func (h *Handler) SetLocalMediaDir(dir string) {
 	h.mediaDir = dir
+}
+
+// Authenticator resolves a session token to a player id.
+type Authenticator interface {
+	Authenticate(token string) (string, error)
+}
+
+// SetAuthenticator enables player-token auth on gameplay endpoints. When set,
+// the player is derived from the verified token instead of trusting a
+// client-supplied user_id, so scores and leaderboards can't be forged.
+func (h *Handler) SetAuthenticator(a Authenticator) { h.auth = a }
+
+// resolveUserID returns the authenticated player id (ignoring the body value)
+// when auth is enabled, or the body value otherwise. It writes a 401 and
+// returns ok=false when a required token is missing or invalid.
+func (h *Handler) resolveUserID(w http.ResponseWriter, r *http.Request, bodyID string) (string, bool) {
+	if h.auth == nil {
+		return bodyID, true
+	}
+	pid, err := h.auth.Authenticate(bearerToken(r))
+	if err != nil || pid == "" {
+		writeError(w, http.StatusUnauthorized, "authentification requise")
+		return "", false
+	}
+	return pid, true
+}
+
+// ownsSession verifies the caller owns the session (when auth is enabled).
+func (h *Handler) ownsSession(w http.ResponseWriter, r *http.Request, session *quiz.Session) bool {
+	if h.auth == nil {
+		return true
+	}
+	pid, err := h.auth.Authenticate(bearerToken(r))
+	if err != nil || pid == "" {
+		writeError(w, http.StatusUnauthorized, "authentification requise")
+		return false
+	}
+	if session.UserID() != pid {
+		writeError(w, http.StatusForbidden, "session d'un autre joueur")
+		return false
+	}
+	return true
 }
 
 // Response represents a standard API response.
@@ -152,10 +195,15 @@ func (h *Handler) HandleStartSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.UserID == "" {
+	userID, ok := h.resolveUserID(w, r, req.UserID)
+	if !ok {
+		return
+	}
+	if userID == "" {
 		writeError(w, http.StatusBadRequest, "user_id is required")
 		return
 	}
+	req.UserID = userID
 
 	// Convert quiz types
 	quizTypes := make([]quiz.QuizType, 0, len(req.QuizTypes))
@@ -214,6 +262,9 @@ func (h *Handler) HandleSubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	session, err := h.quizService.GetSession(r.Context(), req.SessionID)
 	if err != nil {
 		writeSessionError(w, err)
+		return
+	}
+	if !h.ownsSession(w, r, session) {
 		return
 	}
 
@@ -503,6 +554,9 @@ func (h *Handler) HandleGuess(w http.ResponseWriter, r *http.Request) {
 	session, err := h.quizService.GetSession(r.Context(), r.PathValue("session_id"))
 	if err != nil {
 		writeSessionError(w, err)
+		return
+	}
+	if !h.ownsSession(w, r, session) {
 		return
 	}
 	q := session.CurrentQuestion()
