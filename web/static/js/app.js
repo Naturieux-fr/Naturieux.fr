@@ -109,9 +109,20 @@ function quizApp() {
             difficulty: 'beginner',
             taxon: '',
             questionCount: 10,
-            epreuve: 'image',     // image | flash | silhouette | partial
+            epreuve: 'image',     // image | flash | silhouette | partial | sound
             answerMode: 'choices' // choices | free
         },
+
+        // Game format: standard, chrono (global countdown), survie (1 mistake ends it)
+        gameFormat: 'standard',
+        gameFormats: [
+            { id: 'standard', name: 'Standard', desc: 'nombre de planches choisi' },
+            { id: 'chrono', name: 'Chrono', desc: '90 s, un max de bonnes' },
+            { id: 'survie', name: 'Survie', desc: 'une erreur et c\'est fini' }
+        ],
+        chronoTotal: 90,
+        chronoLeft: 0,
+        chronoInterval: null,
 
         // Quiz-mode runtime state
         quizType: 'image',
@@ -465,13 +476,16 @@ function quizApp() {
             this.setTimeLimit();
             this._preGame = { level: this.player.level, achievements: [...(this.player.achievements || [])], dailyStreak: this.player.dailyStreak };
 
+            // Chrono and Survie play through a long pool of questions.
+            const count = this.gameFormat === 'standard' ? this.settings.questionCount : 40;
+
             try {
                 const data = await this.api('/quiz/start', 'POST', {
                     user_id: this.player.id,
                     difficulty: this.settings.difficulty,
                     quiz_types: [this.settings.epreuve],
                     taxon_filter: this.settings.taxon,
-                    question_count: this.settings.questionCount
+                    question_count: count
                 });
 
                 this.sessionId = data.session_id;
@@ -486,6 +500,7 @@ function quizApp() {
 
                 this.loadQuestion(data.question);
                 this.screen = 'quiz';
+                if (this.gameFormat === 'chrono') this.startChrono();
                 // Timer will start when image loads (see onImageLoad)
 
             } catch (e) {
@@ -652,6 +667,11 @@ function quizApp() {
                 }
                 return;
             }
+            // Survie: a single wrong answer (or timeout) ends the run.
+            if (this.gameFormat === 'survie' && !this.isCorrect && !this.inChallenge) {
+                this.showResults();
+                return;
+            }
             if (this.sessionComplete) {
                 if (this.inChallenge) { this.finishChallenge(); }
                 else { this.showResults(); }
@@ -662,9 +682,26 @@ function quizApp() {
             }
         },
 
+        // Global chrono for the Chrono format.
+        startChrono() {
+            this.chronoLeft = this.chronoTotal;
+            this.stopChrono();
+            this.chronoInterval = setInterval(() => {
+                this.chronoLeft--;
+                if (this.chronoLeft <= 0) {
+                    this.stopChrono();
+                    if (this.screen === 'quiz') { this.showFeedback = false; this.showResults(); }
+                }
+            }, 1000);
+        },
+        stopChrono() {
+            if (this.chronoInterval) { clearInterval(this.chronoInterval); this.chronoInterval = null; }
+        },
+
         // Show results
         showResults() {
             this.stopTimer();
+            this.stopChrono();
 
             // The server is the source of truth for XP: refresh the
             // profile and display the difference, then celebrate any progress.
@@ -687,6 +724,7 @@ function quizApp() {
         // Go back to home
         goHome() {
             this.stopTimer();
+            this.stopChrono();
             this.screen = 'home';
         },
 

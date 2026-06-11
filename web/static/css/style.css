@@ -633,3 +633,8 @@ textarea.ink-field { resize: vertical; font-family: inherit; line-height: 1.6; }
 .sound-hint { color: var(--parch, #f3ead8); opacity: .85; font-family: var(--serif); font-style: italic; }
 .sound-player audio { width: 90%; max-width: 420px; }
 @keyframes soundpulse { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.12); opacity: 1; } }
+
+/* ============================ FORMAT CHRONO ============================ */
+.fstat.chrono { color: var(--forest-2); }
+.fstat.chrono.warning { color: var(--rust, #a4471f); animation: chronoPulse .6s ease-in-out infinite; }
+@keyframes chronoPulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }

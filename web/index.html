@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3.6">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.7">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -151,6 +151,19 @@
                                         @click="settings.epreuve = ep.id">
                                     <span class="chip-name" x-text="ep.name"></span>
                                     <span class="chip-desc" x-text="ep.desc"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="form-block">
+                        <label class="form-legend">Format de jeu</label>
+                        <div class="grade-grid">
+                            <template x-for="gf in gameFormats" :key="gf.id">
+                                <button class="grade-chip slim" :class="{ active: gameFormat === gf.id }"
+                                        @click="gameFormat = gf.id">
+                                    <span class="chip-name" x-text="gf.name"></span>
+                                    <span class="chip-desc" x-text="gf.desc"></span>
                                 </button>
                             </template>
                         </div>
@@ -511,6 +524,8 @@
                     <div class="progress-rail"><div class="progress-sap" :style="`width:${(currentQuestion/totalQuestions)*100}%`"></div></div>
                 </div>
                 <div class="field-stats">
+                    <span class="fstat chrono" x-show="gameFormat === 'chrono'" :class="{ warning: chronoLeft <= 15 }" title="Temps restant">⏱ <b x-text="chronoLeft">0</b>s</span>
+                    <span class="fstat" x-show="gameFormat === 'survie'" title="Survie">💀 survie</span>
                     <span class="fstat" title="Série"><b x-text="streak">0</b> série</span>
                     <span class="fstat" title="Points"><b x-text="score">0</b> pts</span>
                     <button x-show="!inRoom" @click="quitGame()" class="abandon" title="Abandonner">✕</button>
@@ -718,6 +733,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.6"></script>
+    <script src="/static/js/app.js?v=3.7"></script>
 </body>
 </html>
