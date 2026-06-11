@@ -56,6 +56,14 @@ type Invite struct {
 	Revoked   bool   `json:"revoked"`
 }
 
+// ResetStore persists admin-issued, single-use password-reset tokens.
+type ResetStore interface {
+	CreateReset(ctx context.Context, token, playerID, createdAt string) error
+	// ConsumeReset atomically marks a token used if still pending and not older
+	// than minCreatedAt, returning the player id it belongs to.
+	ConsumeReset(ctx context.Context, token, minCreatedAt string) (playerID string, ok bool, err error)
+}
+
 // InviteStore persists registration invitations for tracking and revocation.
 type InviteStore interface {
 	CreateInvite(ctx context.Context, token, createdBy, createdAt string) error

@@ -35,6 +35,25 @@
             </template>
         </div>
 
+        <!-- ============ RÉINITIALISATION DU MOT DE PASSE ============ -->
+        <section x-show="screen === 'reset'" x-transition.opacity class="screen home">
+            <div class="stack">
+                <article class="plate reveal" style="--d:0">
+                    <span class="plate-no">Pl. 0</span>
+                    <h2 class="plate-title">Nouveau mot de passe</h2>
+                    <p class="plate-lead">Choisissez un nouveau mot de passe pour votre carnet.</p>
+                    <input type="password" class="ink-field block" x-model="resetPassword"
+                           placeholder="Nouveau mot de passe (6 caractères min.)" @keyup.enter="submitReset()">
+                    <button @click="submitReset()" class="btn btn-solid btn-lg" :disabled="registering">
+                        <span x-show="!registering">Valider</span>
+                        <span x-show="registering" class="spinner"></span>
+                    </button>
+                    <p class="auth-switch"><a @click="resetToken=''; screen='home'">Retour</a></p>
+                    <p class="auth-error" x-show="error" x-text="error"></p>
+                </article>
+            </div>
+        </section>
+
         <!-- ============ ACCUEIL ============ -->
         <section x-show="screen === 'home'" x-transition.opacity class="screen home">
             <header class="masthead reveal" style="--d:0">
@@ -737,7 +756,7 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.9"></script>
+    <script src="/static/js/app.js?v=4.0"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

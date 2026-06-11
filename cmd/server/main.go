@@ -123,6 +123,7 @@ func main() {
 	}
 	inviteRepo := sqlite.NewInviteRepository(db)
 	accountService := account.NewService(playerRepo, playerRepo, inviteRepo, secret, regMode)
+	accountService.SetResetStore(sqlite.NewResetRepository(db)) // admin-issued password resets
 	accountHandler := httphandler.NewAccountHandler(accountService)
 	handler.SetRegistrationMode(string(regMode))
 	handler.SetAuthenticator(accountService)             // gameplay endpoints derive the player from the session token

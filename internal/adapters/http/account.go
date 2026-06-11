@@ -23,6 +23,25 @@ func (h *AccountHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/account/register", h.handleRegister)
 	mux.HandleFunc("POST /api/v1/account/login", h.handleLogin)
 	mux.HandleFunc("GET /api/v1/account/me", h.handleMe)
+	mux.HandleFunc("POST /api/v1/account/reset", h.handleReset)
+}
+
+// handleReset consumes an admin-issued reset token and sets a new password.
+func (h *AccountHandler) handleReset(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	player, token, err := h.accounts.ResetPassword(r.Context(), req.Token, req.Password)
+	if err != nil {
+		h.writeAccountError(w, err)
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"token": token, "player": playerToDTO(player)})
 }
 
 // handleMe returns the authenticated player's id, username and role.
@@ -84,6 +103,8 @@ func (h *AccountHandler) writeAccountError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "mot de passe trop court (6 caractères minimum)")
 	case errors.Is(err, account.ErrBadUsername):
 		writeError(w, http.StatusBadRequest, "nom invalide (2 à 20 caractères)")
+	case errors.Is(err, account.ErrInvalidReset):
+		writeError(w, http.StatusForbidden, "lien de réinitialisation invalide ou expiré")
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}

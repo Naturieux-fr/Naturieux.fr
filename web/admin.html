@@ -138,6 +138,7 @@
                             <button class="btn-mini" x-show="p.role!=='player'" @click="setRole(p.id,'player')">Joueur</button>
                             <button class="btn-mini" x-show="p.role!=='writer'" @click="setRole(p.id,'writer')">Rédacteur</button>
                             <button class="btn-mini" x-show="p.role!=='admin'" @click="setRole(p.id,'admin')">Admin</button>
+                            <button class="btn-mini" @click="resetPlayer(p.id, p.username)" title="Lien de réinitialisation du mot de passe">🔑</button>
                             <button class="btn-trash" @click="deletePlayer(p.id, p.username)" title="Supprimer">✕</button>
                         </div>
                     </template>
@@ -332,6 +333,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.7"></script>
+    <script src="/static/js/admin.js?v=2.8"></script>
 </body>
 </html>

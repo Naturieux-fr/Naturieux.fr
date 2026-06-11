@@ -25,6 +25,7 @@ var (
 	ErrInviteRequired     = errors.New("a valid invitation is required to register")
 	ErrWeakPassword       = errors.New("password must be at least 6 characters")
 	ErrBadUsername        = errors.New("username must be 2 to 20 characters")
+	ErrInvalidReset       = errors.New("invalid or expired reset link")
 )
 
 // Mode is the registration policy.
@@ -40,6 +41,7 @@ const (
 const (
 	sessionTTL = 30 * 24 * time.Hour // players stay logged in for a month
 	inviteTTL  = 14 * 24 * time.Hour // an invitation link expires after two weeks
+	resetTTL   = 24 * time.Hour      // a password-reset link expires after a day
 )
 
 // Service registers and authenticates players.
@@ -47,10 +49,14 @@ type Service struct {
 	accounts ports.AccountStore
 	players  ports.PlayerRepository
 	invites  ports.InviteStore
+	resets   ports.ResetStore
 	secret   string
 	mode     Mode
 	now      func() time.Time
 }
+
+// SetResetStore enables admin-issued password resets.
+func (s *Service) SetResetStore(r ports.ResetStore) { s.resets = r }
 
 // NewService creates the account service. mode selects open or invite signup.
 func NewService(accounts ports.AccountStore, players ports.PlayerRepository, invites ports.InviteStore, secret string, mode Mode) *Service {
@@ -143,6 +149,56 @@ func (s *Service) Me(ctx context.Context, token string) (id, username, role stri
 		return "", "", "", err
 	}
 	return id, p.Username(), role, nil
+}
+
+// IssueReset mints and stores a single-use password-reset token for a player
+// (admin only). The admin shares the resulting link by any channel.
+func (s *Service) IssueReset(ctx context.Context, playerID string) (string, error) {
+	if s.resets == nil {
+		return "", errors.New("password resets unavailable")
+	}
+	if _, err := s.players.GetByID(ctx, playerID); err != nil {
+		return "", err
+	}
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	if err := s.resets.CreateReset(ctx, token, playerID, s.now().UTC().Format(time.RFC3339)); err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// ResetPassword consumes a reset token and sets a new password, returning the
+// player with a fresh session token.
+func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) (*gamification.Player, string, error) {
+	if s.resets == nil {
+		return nil, "", errors.New("password resets unavailable")
+	}
+	if len(newPassword) < 6 {
+		return nil, "", ErrWeakPassword
+	}
+	minCreated := s.now().UTC().Add(-resetTTL).Format(time.RFC3339)
+	playerID, ok, err := s.resets.ConsumeReset(ctx, token, minCreated)
+	if err != nil {
+		return nil, "", err
+	}
+	if !ok {
+		return nil, "", ErrInvalidReset
+	}
+	hash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := s.accounts.SetCredentials(ctx, playerID, hash); err != nil {
+		return nil, "", err
+	}
+	player, err := s.players.GetByID(ctx, playerID)
+	if err != nil {
+		return nil, "", err
+	}
+	return player, auth.IssueToken(playerID, s.secret, sessionTTL, s.now()), nil
 }
 
 // Authenticate validates a session token and returns the player id.

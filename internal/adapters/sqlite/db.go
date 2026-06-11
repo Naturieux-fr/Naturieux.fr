@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS invites (
 	revoked    INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS password_resets (
+	token      TEXT PRIMARY KEY,
+	player_id  TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	used       INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS player_misses (
 	player_id TEXT NOT NULL,
 	cd_nom    INTEGER NOT NULL,

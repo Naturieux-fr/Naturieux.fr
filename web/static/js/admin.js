@@ -45,6 +45,14 @@ function adminApp() {
             try { await this.api(`/admin/players/${id}/role`, 'POST', { role }); await this.loadPlayers(); }
             catch (e) { this.error = e.message; }
         },
+        async resetPlayer(id, username) {
+            try {
+                const d = await this.api(`/admin/players/${id}/reset`, 'POST', {});
+                const link = `${location.origin}/?reset=${encodeURIComponent(d.token)}`;
+                this.copyText(link);
+                alert(`Lien de réinitialisation pour ${username} (copié, valable 24 h) :\n\n${link}\n\nEnvoyez-le à la personne par le canal de votre choix.`);
+            } catch (e) { this.error = e.message; }
+        },
         async deletePlayer(id, name) {
             if (!confirm(`Supprimer le compte « ${name} » ?`)) return;
             try { await this.api(`/admin/players/${id}`, 'DELETE'); await this.loadPlayers(); await this.loadStats(); }

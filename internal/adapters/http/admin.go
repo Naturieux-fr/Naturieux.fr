@@ -104,6 +104,7 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/challenge/schedule", h.requireAuth(h.handleScheduleChallenge))
 	mux.HandleFunc("DELETE /api/v1/admin/players/{id}", h.requireAuth(h.handleDeletePlayer))
 	mux.HandleFunc("POST /api/v1/admin/players/{id}/role", h.requireAuth(h.handleSetPlayerRole))
+	mux.HandleFunc("POST /api/v1/admin/players/{id}/reset", h.requireAuth(h.handleResetPlayer))
 }
 
 // handleStats returns dashboard figures.
@@ -298,6 +299,28 @@ func (h *AdminHandler) handleSetPlayerRole(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeSuccess(w, map[string]string{"message": "updated"})
+}
+
+// handleResetPlayer issues a single-use password-reset token for a player; the
+// admin shares the resulting link with them by any channel (no email needed).
+func (h *AdminHandler) handleResetPlayer(w http.ResponseWriter, r *http.Request) {
+	resetter, ok := h.inviter.(interface {
+		IssueReset(ctx context.Context, playerID string) (string, error)
+	})
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "password resets unavailable")
+		return
+	}
+	token, err := resetter.IssueReset(r.Context(), r.PathValue("id"))
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"token": token})
 }
 
 // wouldRemoveLastAdmin reports whether removing or demoting the given player

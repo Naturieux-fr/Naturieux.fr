@@ -75,6 +75,8 @@ function quizApp() {
             { id: 'Fungi', title: 'Mycologue' }
         ],
         authToken: '',
+        resetToken: '',
+        resetPassword: '',
         usernameInput: '',
         passwordInput: '',
         loginUsername: '',
@@ -210,8 +212,11 @@ function quizApp() {
             // An invitation link (?invite=...) pre-fills the token and forces
             // the registration view.
             try {
-                const invite = new URLSearchParams(location.search).get('invite');
+                const params = new URLSearchParams(location.search);
+                const invite = params.get('invite');
                 if (invite) { this.inviteToken = invite; this.authMode = 'register'; }
+                const reset = params.get('reset');
+                if (reset) { this.resetToken = reset; this.screen = 'reset'; }
             } catch (e) {}
             try {
                 const data = await this.api('/config', 'GET');
@@ -331,6 +336,28 @@ function quizApp() {
                     count, tier, nextAt, progressPct: Math.max(0, Math.min(100, pct))
                 };
             });
+        },
+
+        // Set a new password from an admin-issued reset link.
+        async submitReset() {
+            if (this.resetPassword.length < 6) { this.error = 'Mot de passe : 6 caractères minimum'; return; }
+            this.registering = true;
+            this.error = '';
+            try {
+                const data = await this.api('/account/reset', 'POST', { token: this.resetToken, password: this.resetPassword });
+                this.applyPlayer(data.player);
+                this.saveAccount(data.player.id, data.player.username, data.token);
+                this.fetchMe();
+                this.resetToken = '';
+                this.resetPassword = '';
+                history.replaceState(null, '', '/'); // drop the ?reset token from the URL
+                this.screen = 'home';
+                this.pushToast('🔑', 'Mot de passe changé', 'Vous êtes connecté.');
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.registering = false;
+            }
         },
 
         // Register a real account (username + password).
