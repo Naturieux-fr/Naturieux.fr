@@ -60,7 +60,7 @@ func newAdminTest(t *testing.T) (*httphandler.AdminHandler, string, string) {
 	if err != nil {
 		t.Fatalf("NewLocal() error = %v", err)
 	}
-	handler := httphandler.NewAdminHandler(authSvc, taxref.NewRepository(db), store)
+	handler := httphandler.NewAdminHandler(authSvc, taxref.NewRepository(db), store, nil)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

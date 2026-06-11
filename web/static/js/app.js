@@ -45,6 +45,12 @@ function quizApp() {
             achievements: []
         },
         usernameInput: '',
+        passwordInput: '',
+        loginUsername: '',
+        loginPassword: '',
+        authMode: 'register',          // 'register' | 'login'
+        registrationMode: 'open',      // 'open' | 'invite'
+        inviteToken: '',
         registering: false,
 
         // Toasts (achievements, level-ups, daily streak)
@@ -157,11 +163,20 @@ function quizApp() {
 
         // Load server config
         async loadConfig() {
+            // An invitation link (?invite=...) pre-fills the token and forces
+            // the registration view.
+            try {
+                const invite = new URLSearchParams(location.search).get('invite');
+                if (invite) { this.inviteToken = invite; this.authMode = 'register'; }
+            } catch (e) {}
             try {
                 const data = await this.api('/config', 'GET');
                 this.devMode = data.dev_mode;
-                if (this.devMode) {
-                    console.log('🔧 DEV MODE ENABLED');
+                this.registrationMode = data.registration_mode || 'open';
+                // In invite-only mode, default newcomers to the login view
+                // unless they arrived through an invitation link.
+                if (this.registrationMode === 'invite' && !this.inviteToken) {
+                    this.authMode = 'login';
                 }
             } catch (e) {
                 console.error('Failed to load config:', e);
@@ -245,30 +260,57 @@ function quizApp() {
             this.updateXpPercent();
         },
 
-        // Create the account from the chosen pseudo
+        // Register a real account (username + password).
         async createAccount() {
             const username = this.usernameInput.trim();
-            if (username.length < 2) {
-                this.error = 'Le pseudo doit faire au moins 2 caracteres';
-                return;
-            }
+            if (username.length < 2) { this.error = 'Le pseudo doit faire au moins 2 caractères'; return; }
+            if (this.passwordInput.length < 6) { this.error = 'Mot de passe : 6 caractères minimum'; return; }
 
             this.registering = true;
             this.error = '';
             try {
-                const data = await this.api('/players', 'POST', { username });
-                this.applyPlayer(data);
-                localStorage.setItem('naturieux_account', JSON.stringify({
-                    id: data.id,
-                    username: data.username
-                }));
+                const data = await this.api('/account/register', 'POST', {
+                    username, password: this.passwordInput, invite: this.inviteToken
+                });
+                this.applyPlayer(data.player);
+                this.saveAccount(data.player.id, data.player.username, data.token);
+                this.passwordInput = '';
             } catch (e) {
-                this.error = e.message === 'username already taken'
-                    ? 'Ce pseudo est deja pris'
-                    : e.message;
+                this.error = e.message;
             } finally {
                 this.registering = false;
             }
+        },
+
+        // Log into an existing account.
+        async doLoginAccount() {
+            const username = this.loginUsername.trim();
+            if (!username || !this.loginPassword) { this.error = 'Identifiant et mot de passe requis'; return; }
+            this.registering = true;
+            this.error = '';
+            try {
+                const data = await this.api('/account/login', 'POST', { username, password: this.loginPassword });
+                this.applyPlayer(data.player);
+                this.saveAccount(data.player.id, data.player.username, data.token);
+                this.loginPassword = '';
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.registering = false;
+            }
+        },
+
+        saveAccount(id, username, token) {
+            localStorage.setItem('naturieux_account', JSON.stringify({ id, username, token }));
+        },
+
+        logout() {
+            localStorage.removeItem('naturieux_account');
+            this.clearRoomSession();
+            this.player = { id: '', name: '', level: 1, xp: 0, xpNext: 100, xpPercent: 0, totalXp: 0, totalGames: 0, bestStreak: 0, dailyStreak: 0, achievements: [] };
+            this.usernameInput = ''; this.passwordInput = ''; this.loginUsername = ''; this.loginPassword = '';
+            this.authMode = 'register';
+            this.screen = 'home';
         },
 
         // Update XP percentage

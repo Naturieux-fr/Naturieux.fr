@@ -54,5 +54,19 @@ func (r *PlayerRepository) UpsertAdmin(ctx context.Context, id, username, passwo
 	return nil
 }
 
+// SetCredentials sets a player's password hash, marking them a registered
+// account. The role is left untouched (defaults to 'player').
+func (r *PlayerRepository) SetCredentials(ctx context.Context, id, passwordHash string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE players SET password_hash = ? WHERE id = ?`, passwordHash, id)
+	if err != nil {
+		return fmt.Errorf("setting credentials: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ports.ErrNotFound
+	}
+	return nil
+}
+
 // Ensure interface compliance.
 var _ ports.AccountStore = (*PlayerRepository)(nil)

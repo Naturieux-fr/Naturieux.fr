@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
-    <link rel="stylesheet" href="/static/css/admin.css?v=2.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.0">
+    <link rel="stylesheet" href="/static/css/admin.css?v=2.1">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -43,8 +43,20 @@
 
             <p class="adm-error" x-show="error" x-text="error"></p>
 
-            <!-- Recherche -->
+            <!-- Invitations -->
             <article class="plate reveal" style="--d:1">
+                <span class="plate-no">✦</span>
+                <h2 class="plate-title">Inviter un naturaliste</h2>
+                <p class="plate-lead">Générez un lien d'inscription à envoyer (valable 14 jours).</p>
+                <button @click="generateInvite()" class="btn btn-solid">Générer un lien d'invitation</button>
+                <div class="invite-out" x-show="inviteLink" style="margin-top:14px">
+                    <input type="text" class="ink-field" :value="inviteLink" readonly @focus="$event.target.select()">
+                    <button @click="copyInvite()" class="btn btn-quiet" style="margin-top:8px">Copier le lien</button>
+                </div>
+            </article>
+
+            <!-- Recherche -->
+            <article class="plate reveal" style="--d:2">
                 <span class="plate-no">I</span>
                 <h2 class="plate-title">Trouver une espèce</h2>
                 <div class="field-row">
@@ -118,6 +130,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.0"></script>
+    <script src="/static/js/admin.js?v=2.1"></script>
 </body>
 </html>

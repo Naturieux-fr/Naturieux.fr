@@ -31,17 +31,24 @@ type MediaStore interface {
 // maxUploadBytes caps an uploaded photo's size.
 const maxUploadBytes = 10 << 20 // 10 MiB
 
+// Inviter mints player invitation tokens.
+type Inviter interface {
+	IssueInvite() string
+}
+
 // AdminHandler serves the back-office API. Photo management is only available
 // when the species source is TAXREF (photos is non-nil).
 type AdminHandler struct {
 	auth    AdminAuth
 	photos  *taxref.Repository // nil when the species source has no managed photos
 	storage MediaStore         // nil when uploads are not configured
+	inviter Inviter            // nil when account invites are unavailable
 }
 
-// NewAdminHandler creates the admin API handler. photos and store may be nil.
-func NewAdminHandler(auth AdminAuth, photos *taxref.Repository, store MediaStore) *AdminHandler {
-	return &AdminHandler{auth: auth, photos: photos, storage: store}
+// NewAdminHandler creates the admin API handler. photos, store and inviter may
+// be nil.
+func NewAdminHandler(auth AdminAuth, photos *taxref.Repository, store MediaStore, inviter Inviter) *AdminHandler {
+	return &AdminHandler{auth: auth, photos: photos, storage: store, inviter: inviter}
 }
 
 // RegisterRoutes wires the admin endpoints onto the mux.
@@ -52,6 +59,17 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/photos", h.requireAdmin(h.handleAddPhoto))
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/upload", h.requireAdmin(h.handleUploadPhoto))
 	mux.HandleFunc("DELETE /api/v1/admin/photos/{id}", h.requireAdmin(h.handleDeletePhoto))
+	mux.HandleFunc("POST /api/v1/admin/invites", h.requireAuth(h.handleCreateInvite))
+}
+
+// handleCreateInvite mints a player invitation token (the front-end turns it
+// into a shareable link).
+func (h *AdminHandler) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
+	if h.inviter == nil {
+		writeError(w, http.StatusServiceUnavailable, "invitations unavailable")
+		return
+	}
+	writeSuccess(w, map[string]string{"invite": h.inviter.IssueInvite()})
 }
 
 // handleLogin authenticates an admin and returns a session token.
@@ -72,8 +90,8 @@ func (h *AdminHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeSuccess(w, map[string]string{"token": token})
 }
 
-// requireAdmin wraps a handler, rejecting requests without a valid admin token.
-func (h *AdminHandler) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+// requireAuth wraps a handler, rejecting requests without a valid admin token.
+func (h *AdminHandler) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := bearerToken(r)
 		if token == "" {
@@ -84,12 +102,19 @@ func (h *AdminHandler) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "forbidden")
 			return
 		}
+		next(w, r)
+	}
+}
+
+// requireAdmin is requireAuth plus a guard that photo management is available.
+func (h *AdminHandler) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return h.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if h.photos == nil {
 			writeError(w, http.StatusServiceUnavailable, "photo management requires the TAXREF species source")
 			return
 		}
 		next(w, r)
-	}
+	})
 }
 
 // handleSearchTaxa finds taxa by name (scientific or vernacular).

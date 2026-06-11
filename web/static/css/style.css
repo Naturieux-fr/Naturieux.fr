@@ -393,6 +393,20 @@ body {
 .ledger-meta small { color: var(--ink-3); font-size: .72rem; }
 .empty-note { text-align: center; color: var(--ink-3); font-style: italic; font-family: var(--serif); padding: 30px 0; }
 
+/* ============================ COMPTES ============================ */
+.ink-field.block { display: block; width: 100%; margin-bottom: 12px; }
+.auth-switch { margin-top: 14px; font-size: .86rem; color: var(--ink-3); text-align: center; }
+.auth-switch a { color: var(--rust); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.auth-switch.muted { font-style: italic; }
+.auth-error { margin-top: 12px; color: var(--rust); font-family: var(--serif); font-style: italic; text-align: center; }
+.plate-lead.invited { color: var(--moss); font-weight: 600; }
+.member-card { position: relative; }
+.member-logout {
+    position: absolute; top: 12px; right: 12px; background: none; border: none;
+    color: var(--ink-3); font-size: 1.1rem; cursor: pointer; opacity: .6;
+}
+.member-logout:hover { opacity: 1; color: var(--rust); }
+
 /* ============================ HAUTS FAITS ============================ */
 .ach-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

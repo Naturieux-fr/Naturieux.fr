@@ -21,9 +21,15 @@ import (
 
 // Handler contains all HTTP handlers.
 type Handler struct {
-	quizService *appquiz.Service
-	devMode     bool
-	mediaDir    string // local media directory, for serving owned photos
+	quizService      *appquiz.Service
+	devMode          bool
+	mediaDir         string // local media directory, for serving owned photos
+	registrationMode string // "open" or "invite" (surfaced in /config)
+}
+
+// SetRegistrationMode records the account registration policy for /config.
+func (h *Handler) SetRegistrationMode(mode string) {
+	h.registrationMode = mode
 }
 
 // NewHandler creates a new Handler.
@@ -351,8 +357,14 @@ func playerToDTO(p *gamification.Player) PlayerDTO {
 	}
 }
 
-// HandleRegisterPlayer handles POST /api/v1/players
+// HandleRegisterPlayer handles POST /api/v1/players (legacy passwordless
+// registration). Disabled when registration is invite-only so it cannot be
+// used to bypass invitations; real accounts go through /api/v1/account.
 func (h *Handler) HandleRegisterPlayer(w http.ResponseWriter, r *http.Request) {
+	if h.registrationMode == "invite" {
+		writeError(w, http.StatusForbidden, "inscription sur invitation uniquement")
+		return
+	}
 	var req struct {
 		Username string `json:"username"`
 	}
@@ -461,9 +473,14 @@ func (h *Handler) HandleConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mode := h.registrationMode
+	if mode == "" {
+		mode = "open"
+	}
 	writeSuccess(w, map[string]interface{}{
-		"dev_mode": h.devMode,
-		"version":  "1.0.0",
+		"dev_mode":          h.devMode,
+		"registration_mode": mode,
+		"version":           "1.0.0",
 	})
 }
 

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.9">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.0">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -51,19 +51,51 @@
             </header>
 
             <div class="stack">
-                <!-- Première visite : ouverture du carnet -->
+                <!-- Première visite : inscription / connexion -->
                 <article class="plate reveal" style="--d:1" x-show="!player.id">
                     <span class="plate-no">Pl. 0</span>
-                    <h2 class="plate-title">Ouvrez votre carnet</h2>
-                    <p class="plate-lead">Inscrivez votre nom de naturaliste pour entrer au registre.</p>
-                    <div class="field-row">
-                        <input type="text" class="ink-field" x-model="usernameInput" maxlength="20"
-                               placeholder="Votre nom" @keyup.enter="createAccount()">
-                        <button @click="createAccount()" class="btn btn-solid" :disabled="registering">
-                            <span x-show="!registering">Commencer</span>
-                            <span x-show="registering" class="spinner"></span>
-                        </button>
-                    </div>
+
+                    <!-- Inscription -->
+                    <template x-if="authMode === 'register'">
+                        <div>
+                            <h2 class="plate-title">Ouvrez votre carnet</h2>
+                            <p class="plate-lead" x-show="!inviteToken">Créez votre compte de naturaliste.</p>
+                            <p class="plate-lead invited" x-show="inviteToken">✦ Invitation acceptée — créez votre compte.</p>
+                            <input type="text" class="ink-field block" x-model="usernameInput" maxlength="20"
+                                   placeholder="Nom de naturaliste" @keyup.enter="createAccount()">
+                            <input type="password" class="ink-field block" x-model="passwordInput"
+                                   placeholder="Mot de passe (6 caractères min.)" @keyup.enter="createAccount()">
+                            <button @click="createAccount()" class="btn btn-solid btn-lg" :disabled="registering">
+                                <span x-show="!registering">Créer mon carnet</span>
+                                <span x-show="registering" class="spinner"></span>
+                            </button>
+                            <p class="auth-switch">Déjà inscrit ? <a @click="authMode='login'; error=''">Se connecter</a></p>
+                        </div>
+                    </template>
+
+                    <!-- Connexion -->
+                    <template x-if="authMode === 'login'">
+                        <div>
+                            <h2 class="plate-title">Reprendre son carnet</h2>
+                            <p class="plate-lead">Connectez-vous à votre compte.</p>
+                            <input type="text" class="ink-field block" x-model="loginUsername" maxlength="20"
+                                   placeholder="Nom de naturaliste" @keyup.enter="doLoginAccount()">
+                            <input type="password" class="ink-field block" x-model="loginPassword"
+                                   placeholder="Mot de passe" @keyup.enter="doLoginAccount()">
+                            <button @click="doLoginAccount()" class="btn btn-solid btn-lg" :disabled="registering">
+                                <span x-show="!registering">Se connecter</span>
+                                <span x-show="registering" class="spinner"></span>
+                            </button>
+                            <p class="auth-switch" x-show="registrationMode === 'open' || inviteToken">
+                                Pas de compte ? <a @click="authMode='register'; error=''">S'inscrire</a>
+                            </p>
+                            <p class="auth-switch muted" x-show="registrationMode === 'invite' && !inviteToken">
+                                Inscription sur invitation uniquement.
+                            </p>
+                        </div>
+                    </template>
+
+                    <p class="auth-error" x-show="error" x-text="error"></p>
                 </article>
 
                 <!-- Carte de membre -->
@@ -84,6 +116,7 @@
                     <div class="member-streak" x-show="player.dailyStreak >= 2" title="Jours consécutifs">
                         <span class="flame">🔥</span><span x-text="player.dailyStreak"></span>
                     </div>
+                    <button class="member-logout" @click="logout()" title="Se déconnecter">⎋</button>
                 </article>
 
                 <!-- Préparer une sortie -->
@@ -483,6 +516,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=2.9"></script>
+    <script src="/static/js/app.js?v=3.0"></script>
 </body>
 </html>

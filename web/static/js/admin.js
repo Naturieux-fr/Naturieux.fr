@@ -11,9 +11,22 @@ function adminApp() {
         selected: null,
         photos: [],
         form: { mode: 'upload', url: '', file: null, preview: '', attribution: '', license: '', difficulty: '' },
+        inviteLink: '',
 
         init() {
             this.token = localStorage.getItem('naturieux_admin_token') || '';
+        },
+
+        // Generate a player invitation link to share.
+        async generateInvite() {
+            this.error = '';
+            try {
+                const data = await this.api('/admin/invites', 'POST', {});
+                this.inviteLink = `${location.origin}/?invite=${encodeURIComponent(data.invite)}`;
+            } catch (e) { this.error = e.message; }
+        },
+        async copyInvite() {
+            try { await navigator.clipboard.writeText(this.inviteLink); } catch (e) {}
         },
 
         // Authenticated API call. Returns the `data` payload or throws.

@@ -19,4 +19,7 @@ type AccountStore interface {
 
 	// UpsertAdmin creates or updates an admin account.
 	UpsertAdmin(ctx context.Context, id, username, passwordHash, createdAt string) error
+
+	// SetCredentials sets a player's password hash (used at registration).
+	SetCredentials(ctx context.Context, id, passwordHash string) error
 }

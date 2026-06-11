@@ -20,6 +20,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/storage"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/application/account"
 	adminapp "github.com/Naturieux-fr/Naturieux.fr/internal/application/admin"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/application/room"
@@ -95,7 +96,8 @@ func main() {
 	handler := httphandler.NewHandler(quizService, devMode)
 
 	// Admin back-office: auth + photo management (photos only when TAXREF)
-	authService := adminapp.NewService(playerRepo, authSecret())
+	secret := authSecret()
+	authService := adminapp.NewService(playerRepo, secret)
 	seedAdminFromEnv(authService)
 	taxrefRepo, _ := speciesRepo.(*taxref.Repository) // nil unless SPECIES_SOURCE=taxref
 	mediaStore, err := storage.FromEnv(backgroundCtx)
@@ -103,7 +105,18 @@ func main() {
 		log.Fatalf("Failed to initialize media storage: %v", err)
 	}
 	log.Printf("🗄️  Media storage ready")
-	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo, mediaStore)
+
+	// Player accounts: registration (open or invite-only) + login.
+	regMode := account.Open
+	if os.Getenv("REGISTRATION_MODE") == "invite" {
+		regMode = account.Invite
+	}
+	accountService := account.NewService(playerRepo, playerRepo, secret, regMode)
+	accountHandler := httphandler.NewAccountHandler(accountService)
+	handler.SetRegistrationMode(string(regMode))
+	log.Printf("👤 Account registration: %s", regMode)
+
+	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo, mediaStore, accountService)
 
 	// Multiplayer rooms (in-memory, polled by clients; reclaimed when idle)
 	roomManager := room.NewManager(questionFactory)
@@ -115,6 +128,7 @@ func main() {
 	handler.RegisterRoutes(mux)
 	adminHandler.RegisterRoutes(mux)
 	roomHandler.RegisterRoutes(mux)
+	accountHandler.RegisterRoutes(mux)
 
 	// Serve the admin page
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
