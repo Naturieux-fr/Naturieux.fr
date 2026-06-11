@@ -5,7 +5,7 @@
 //
 //	importtaxref -file path/to/TAXREFv18.txt [-db naturieux.db] [-version v18.0]
 //
-// The file is TAXREFvNN.txt from the native TAXREF archive (INPN, Licence
+// The file is TAXREFvNN.txt from the native TAXREF archive (INPN, License
 // Ouverte). The native file carries the GROUP1/2/3_INPN columns used for the
 // quiz categories (Mammifères, Oiseaux, Reptiles, Amphibiens…) and the FR
 // metropolitan-presence column — unlike the reduced GBIF Darwin Core export.

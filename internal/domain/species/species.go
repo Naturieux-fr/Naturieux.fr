@@ -197,13 +197,13 @@ func (s *Species) GenusID() int {
 	return ancestors[len(ancestors)-1]
 }
 
-// SetRank sets the taxonomic rank.
 // Family returns the taxonomic family (may be empty).
 func (s *Species) Family() string { return s.family }
 
 // SetFamily sets the taxonomic family.
 func (s *Species) SetFamily(family string) { s.family = family }
 
+// SetRank sets the taxonomic rank.
 func (s *Species) SetRank(rank string) {
 	s.rank = rank
 }

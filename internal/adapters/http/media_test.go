@@ -97,6 +97,6 @@ func TestAdminMediaAndLocate(t *testing.T) {
 		"photo_id": int(nd["photo_id"].(float64)), "cd_nom": int(nd["target_cd"].(float64)), "x": 0.5, "y": 0.5,
 	}))
 	if ok, ad := decode(t, rec); !ok || ad["correct"] != true {
-		t.Errorf("locate answer (centre) = %s", rec.Body)
+		t.Errorf("locate answer (center) = %s", rec.Body)
 	}
 }

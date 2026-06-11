@@ -47,7 +47,7 @@ func TestTaxrefRepository_QueriesAndMedia(t *testing.T) {
 	if sim, err := r.GetSimilar(ctx, 1, 5); err != nil {
 		t.Errorf("GetSimilar: %v", err)
 	} else if len(sim) == 0 {
-		t.Log("no same-family neighbour (ok with this tiny set)")
+		t.Log("no same-family neighbor (ok with this tiny set)")
 	}
 	// Other families (for the family quiz): birds from different families.
 	if other, err := r.GetOtherFamilies(ctx, 1, 3); err != nil || len(other) == 0 {

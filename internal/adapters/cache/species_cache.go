@@ -209,7 +209,7 @@ func (c *SpeciesCache) Warm(ctx context.Context, taxa []string, perTaxon int) er
 }
 
 // StartAutoWarm warms the cache immediately, then re-warms at every
-// interval until ctx is cancelled. Errors are logged, not fatal: the cache
+// interval until ctx is canceled. Errors are logged, not fatal: the cache
 // degrades gracefully to source fallthrough.
 func (c *SpeciesCache) StartAutoWarm(ctx context.Context, interval time.Duration, taxa []string, perTaxon int) {
 	warm := func() {

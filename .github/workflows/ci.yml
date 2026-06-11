@@ -91,6 +91,9 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          # Compile golangci-lint with the runner's Go (1.25) so it matches the
+          # project's go directive; the prebuilt binary lags behind.
+          install-mode: goinstall
           args: --timeout=5m --out-format=colored-line-number
 
       - name: Run golangci-lint (JSON for artifacts)

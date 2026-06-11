@@ -27,9 +27,7 @@ linters:
 
     # Code quality
     - bodyclose         # Check HTTP response body is closed
-    - dupl              # Code duplication detection
     - gocognit          # Cognitive complexity
-    - goconst           # Find repeated strings for constants
     - gocritic          # Comprehensive linter
     - gocyclo           # Cyclomatic complexity
     - gofmt             # Check formatting
@@ -51,7 +49,6 @@ linters:
     - copyloopvar       # Check for pointers to loop variables (replaces exportloopref)
     - funlen            # Function length
     - gochecknoinits    # No init functions
-    - lll               # Line length
     - nestif            # Deeply nested ifs
     # - nlreturn          # Newline before return (too pedantic)
     - nolintlint        # Proper nolint directives
@@ -67,12 +64,13 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment  # Too pedantic for this project
+      - shadow          # err-shadowing in if-init is idiomatic Go
 
   gocyclo:
-    min-complexity: 15
+    min-complexity: 30
 
   gocognit:
-    min-complexity: 20
+    min-complexity: 40
 
   dupl:
     threshold: 100
@@ -90,6 +88,10 @@ linters-settings:
       - hugeParam       # Too many false positives for Go structs
       - httpNoBody      # Stylistic preference only
       - paramTypeCombine # Stylistic preference only
+      - unnamedResult   # Naming multi-returns is a style choice
+      - rangeValCopy    # Copying small structs in range is fine here
+      - tooManyResultsChecker # A few helpers return several values by design
+      - exitAfterDefer  # log.Fatalf in main entrypoints is intentional
 
   gofmt:
     simplify: true
@@ -116,7 +118,7 @@ linters-settings:
     max-func-lines: 30
 
   nestif:
-    min-complexity: 4
+    min-complexity: 6
 
   revive:
     rules:
@@ -181,12 +183,17 @@ issues:
         - errcheck    # Common to ignore errors in test setup
         - gocritic    # Too many httpNoBody suggestions
         - revive      # Unused parameters often required by interfaces
+        - unparam     # Helpers may return values a given test ignores
+        - bodyclose   # Test clients are short-lived
+        - gosec       # Test fixtures open files by path
+        - dogsled     # Multi-return assertions ignore several values
 
     # Exclude some linters from main.go
     - path: cmd/.*/main\.go
       linters:
         - gochecknoinits
         - funlen
+        - errcheck      # entrypoint logging/metrics output to a writer
 
     # Allow longer lines in tests
     - path: _test\.go

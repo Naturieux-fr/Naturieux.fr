@@ -54,7 +54,7 @@ func (h *RoomHandler) handleSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer c.CloseNow()
+	defer func() { _ = c.CloseNow() }()
 	ctx := r.Context()
 
 	id, updates, err := h.rooms.Subscribe(code)

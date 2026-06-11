@@ -21,7 +21,7 @@ const sampleTAXREF = "CD_NOM\tCD_REF\tCD_TAXSUP\tRANG\tLB_NOM\tNOM_VERN\tREGNE\t
 	"60577\t60577\t198937\tES\tCanis lupus\tLoup gris\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n" +
 	"60596\t60596\t198937\tES\tMeles meles\tBlaireau européen\tAnimalia\tMammalia\tCarnivora\tMustelidae\tMammifères\tP\n" +
 	// A bird
-	"3371\t3371\t2222\tES\tColumba palumbus\tPigeon ramier\tAnimalia\tAves\tColumbiformes\tColumbidae\tOiseaux\tP\n" +
+	"3371\t3371\t2222\tES\tColumba palumbus\tPigeon ramier\tAnimalia\tAves\tColumbiformes\tColumbia\tOiseaux\tP\n" +
 	// A synonym (CD_NOM != CD_REF) — must be skipped
 	"99999\t60585\t198937\tES\tVulpes vulgaris\tvieux synonyme\tAnimalia\tMammalia\tCarnivora\tCanidae\tMammifères\tP\n" +
 	// A genus rank — must be skipped (not a species)

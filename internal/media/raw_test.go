@@ -10,7 +10,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/media"
 )
 
-// makeJPEG encodes a solid-colour image of the given size.
+// makeJPEG encodes a solid-color image of the given size.
 func makeJPEG(t *testing.T, w, h int) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
