@@ -59,6 +59,42 @@ func TestImportOccurrences_AggregatesPresence(t *testing.T) {
 	}
 }
 
+func TestImportOccurrences_MatchesByID(t *testing.T) {
+	db, err := sqlite.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	_, _ = db.Exec(`INSERT INTO taxref_species (cd_nom, cd_ref, rang, scientific_name) VALUES
+		(60585, 60585, 'ES', 'Vulpes vulpes')`)
+
+	// INPN-style export keyed by CD_REF (the TAXREF id) — no name column needed.
+	csv := strings.Join([]string{
+		"cd_ref\tmois\tnom_region",
+		"60585\t11\tOccitanie",
+		"60585\t11\tOccitanie",
+		"60585\t11\tOccitanie",
+		"99999\t11\tOccitanie", // unknown id → ignored
+	}, "\n")
+
+	stats, err := ImportOccurrences(db, strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if stats.Matched != 3 {
+		t.Errorf("matched = %d, want 3 (id 99999 unknown)", stats.Matched)
+	}
+	if !hasMonth(t, db, 60585, 11) {
+		t.Error("Vulpes should be present in November via id match")
+	}
+	if !hasRegion(t, db, 60585, "Occitanie") {
+		t.Error("Vulpes should be present in Occitanie via id match")
+	}
+}
+
 func hasMonth(t *testing.T, db *sql.DB, cd, m int) bool {
 	t.Helper()
 	var n int

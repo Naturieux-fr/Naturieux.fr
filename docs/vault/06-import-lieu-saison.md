@@ -23,12 +23,21 @@ go run ./cmd/importoccurrences -file path/to/occurrence.txt -db naturieux.db
 # ou le binaire : ./importoccurrences -file occurrence.txt -db naturieux.db
 ```
 
-L'outil lit le fichier tabulé (colonnes repérées par leur nom : `species`/
-`scientificName`, `month`/`mois`, `level1Name`/`stateProvince`, `countryCode`),
-agrège par espèce les **mois** et **régions** où elle est observée, et remplit
-`species_months` / `species_regions`. Les espèces sont reliées à TAXREF par leur
-nom scientifique. Un couple (espèce, mois) ou (espèce, région) n'est gardé qu'à
-partir de quelques observations, pour écarter le bruit.
+L'outil lit le fichier tabulé (colonnes repérées par leur nom) et agrège par
+espèce les **mois** et **régions** d'observation dans `species_months` /
+`species_regions`. Colonnes reconnues :
+
+- **identifiant** : `cd_ref` / `cd_nom` (INPN/OpenObs) → **apparié exactement par
+  ID TAXREF**, sans ambiguïté de nom ni de synonyme. **Source recommandée.**
+- **nom** (repli, pour GBIF qui a son propre identifiant) : `species` / `scientificName`.
+- **mois** : `month` / `mois` (numéro ou date ISO).
+- **région** : `level1Name` (GADM) / `stateProvince` / `nom_region`.
+- **pays** : `countryCode` (France seulement, si présent).
+
+Un couple (espèce, mois) ou (espèce, région) n'est gardé qu'à partir de quelques
+observations, pour écarter le bruit. Avec l'export INPN (clé CD_REF), l'immense
+majorité des espèces réellement observées en France sont couvertes — appariées
+**par identifiant**.
 
 ## 3. Utilisation
 

@@ -38,7 +38,7 @@ const (
 func ImportOccurrences(db *sql.DB, r io.Reader) (OccurrenceStats, error) {
 	var stats OccurrenceStats
 
-	nameToCd, err := loadNameIndex(db)
+	nameToCd, cdSet, err := loadNameIndex(db)
 	if err != nil {
 		return stats, err
 	}
@@ -54,8 +54,8 @@ func ImportOccurrences(db *sql.DB, r io.Reader) (OccurrenceStats, error) {
 		return stats, fmt.Errorf("occurrence import: reading header: %w", err)
 	}
 	idx := indexOccurrenceColumns(header)
-	if idx.species < 0 {
-		return stats, fmt.Errorf("occurrence import: no species/scientific-name column found")
+	if idx.id < 0 && idx.species < 0 {
+		return stats, fmt.Errorf("occurrence import: no TAXREF id (cd_ref/cd_nom) nor species name column found")
 	}
 
 	// Aggregate in memory, keyed by cd_nom (only matched species).
@@ -77,8 +77,17 @@ func ImportOccurrences(db *sql.DB, r io.Reader) (OccurrenceStats, error) {
 				continue
 			}
 		}
-		name := normalizeBinomial(get(fields, idx.species))
-		cd, ok := nameToCd[name]
+		// Match by TAXREF id (cd_ref/cd_nom) when the export carries it — exact
+		// and synonym-proof — otherwise fall back to the scientific name.
+		cd, ok := 0, false
+		if idx.id >= 0 {
+			if id, err := strconv.Atoi(strings.TrimSpace(get(fields, idx.id))); err == nil && cdSet[id] {
+				cd, ok = id, true
+			}
+		}
+		if !ok && idx.species >= 0 {
+			cd, ok = nameToCd[normalizeBinomial(get(fields, idx.species))]
+		}
 		if !ok {
 			continue
 		}
@@ -104,28 +113,31 @@ func ImportOccurrences(db *sql.DB, r io.Reader) (OccurrenceStats, error) {
 	return stats, nil
 }
 
-// loadNameIndex maps every TAXREF binomial scientific name to its cd_nom.
-func loadNameIndex(db *sql.DB) (map[string]int, error) {
+// loadNameIndex maps every TAXREF binomial scientific name to its cd_nom, and
+// returns the set of valid cd_noms for id-based matching.
+func loadNameIndex(db *sql.DB) (map[string]int, map[int]bool, error) {
 	rows, err := db.Query(`SELECT cd_nom, scientific_name FROM taxref_species`)
 	if err != nil {
-		return nil, fmt.Errorf("occurrence import: loading names: %w", err)
+		return nil, nil, fmt.Errorf("occurrence import: loading names: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	out := make(map[string]int, 1<<18)
+	set := make(map[int]bool, 1<<18)
 	for rows.Next() {
 		var cd int
 		var name string
 		if err := rows.Scan(&cd, &name); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		set[cd] = true
 		if key := normalizeBinomial(name); key != "" {
 			if _, exists := out[key]; !exists {
 				out[key] = cd
 			}
 		}
 	}
-	return out, rows.Err()
+	return out, set, rows.Err()
 }
 
 func writeOccurrences(db *sql.DB, months map[int]map[int]int, regions map[int]map[string]int, stats *OccurrenceStats) error {
@@ -180,6 +192,7 @@ func writeOccurrences(db *sql.DB, months map[int]map[int]int, regions map[int]ma
 
 // occurrenceColumns holds the resolved column indices.
 type occurrenceColumns struct {
+	id      int
 	species int
 	month   int
 	region  int
@@ -187,9 +200,13 @@ type occurrenceColumns struct {
 }
 
 func indexOccurrenceColumns(header []string) occurrenceColumns {
-	idx := occurrenceColumns{species: -1, month: -1, region: -1, country: -1}
+	idx := occurrenceColumns{id: -1, species: -1, month: -1, region: -1, country: -1}
 	for i, h := range header {
 		switch strings.ToLower(strings.TrimSpace(h)) {
+		case "cd_ref", "cdref", "cd_nom", "cdnom", "taxrefid":
+			if idx.id < 0 {
+				idx.id = i
+			}
 		case "species":
 			idx.species = i
 		case "scientific_name", "scientificname", "nom_valide", "nomvalide":
