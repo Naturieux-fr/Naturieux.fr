@@ -54,6 +54,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("import failed: %v", err)
 	}
+	log.Printf("Compacting database…")
+	if err := sqlite.Optimize(db); err != nil {
+		log.Printf("warning: optimize failed: %v", err)
+	}
+
 	log.Printf("Done: %d rows read, %d matched to a species, %d species now have lieu/saison data",
 		stats.Read, stats.Matched, stats.Species)
 }

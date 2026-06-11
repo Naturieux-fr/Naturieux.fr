@@ -61,6 +61,11 @@ func main() {
 		}
 	}
 
+	log.Printf("Compacting database…")
+	if err := sqlite.Optimize(db); err != nil {
+		log.Printf("warning: optimize failed: %v", err)
+	}
+
 	repo := taxref.NewRepository(db)
 	count, _ := repo.CountSpecies(context.Background())
 	log.Printf("Done: %d read, %d imported, %d skipped (%d species now in database)",

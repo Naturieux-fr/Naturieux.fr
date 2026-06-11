@@ -114,6 +114,24 @@ La propagation DNS peut prendre quelques minutes à quelques heures.
 Naturieux fonctionne sans API externe : on **importe les données une fois** dans
 sa base, puis plus aucun appel sortant.
 
+### 0. Bootstrap automatique (optionnel)
+
+Pour que `docker compose up` télécharge **et importe TAXREF** tout seul au
+**premier** démarrage (puis plus jamais), renseigne dans `.env` :
+
+```dotenv
+# URL du fichier TAXREF natif (.txt) ou de son archive .zip (open data INPN)
+BOOTSTRAP_TAXREF_URL=https://…/TAXREFvNN.zip
+# Optionnel — export d'occurrences pour lieu/saison (fichier potentiellement
+# très volumineux : à activer en connaissance de cause)
+BOOTSTRAP_OCCURRENCES_URL=
+```
+
+Le téléchargement n'a lieu que si la base est **vide**. **Tes photos et sons ne
+sont jamais téléchargés** (ce sont tes médias) : ajoute-les via l'admin (§7b).
+Si tu préfères tout maîtriser à la main, laisse ces variables vides et utilise
+les imports ci-dessous.
+
 Les imports écrivent dans le **même fichier SQLite** que le serveur (volume
 `naturieux-data`). Le plus simple est de les lancer dans un conteneur jetable
 `golang` qui monte ce volume — **aucun Go requis sur l'hôte**. Fais-les de

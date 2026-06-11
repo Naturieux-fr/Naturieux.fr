@@ -63,6 +63,10 @@ func main() {
 	defer func() { _ = db.Close() }()
 	log.Printf("Database: %s", dbPath)
 
+	// Optional one-time data bootstrap (TAXREF / occurrences) from open-data
+	// URLs, before the species source is chosen so auto-detect sees the data.
+	bootstrapData(db)
+
 	// Background tasks stop when the server shuts down
 	backgroundCtx, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()

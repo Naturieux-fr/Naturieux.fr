@@ -122,7 +122,16 @@ func Open(path string) (*sql.DB, error) {
 	// SQLITE_BUSY errors under concurrent access.
 	db.SetMaxOpenConns(1)
 
-	if _, err := db.Exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;"); err != nil {
+	// WAL + tuned pragmas: faster writes (synchronous NORMAL is durable under
+	// WAL), an 8 MiB page cache and in-memory temp tables speed up the large
+	// TAXREF queries, and a busy timeout avoids transient lock errors.
+	if _, err := db.Exec(`
+		PRAGMA journal_mode = WAL;
+		PRAGMA foreign_keys = ON;
+		PRAGMA synchronous = NORMAL;
+		PRAGMA busy_timeout = 5000;
+		PRAGMA cache_size = -8000;
+		PRAGMA temp_store = MEMORY;`); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("configuring database: %w", err)
 	}
@@ -138,6 +147,22 @@ func Open(path string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// Optimize compacts the database and refreshes query-planner statistics. Run
+// it after a bulk import: it truncates the WAL, reclaims free pages (VACUUM)
+// and updates ANALYZE stats so the large TAXREF queries stay fast.
+func Optimize(db *sql.DB) error {
+	for _, stmt := range []string{
+		"PRAGMA wal_checkpoint(TRUNCATE)",
+		"ANALYZE",
+		"VACUUM",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("optimize (%s): %w", stmt, err)
+		}
+	}
+	return nil
 }
 
 // migrate brings older databases up to date by adding columns that were

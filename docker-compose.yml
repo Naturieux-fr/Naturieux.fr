@@ -17,6 +17,11 @@ services:
       ADMIN_USERNAME: "${ADMIN_USERNAME:-}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
       AUTH_SECRET: "${AUTH_SECRET:-}"
+      # Optional one-time data bootstrap on first run (downloads + imports, then
+      # never again). Photos/sounds remain curator-added. The occurrence file
+      # can be very large.
+      BOOTSTRAP_TAXREF_URL: "${BOOTSTRAP_TAXREF_URL:-}"
+      BOOTSTRAP_OCCURRENCES_URL: "${BOOTSTRAP_OCCURRENCES_URL:-}"
       # Media storage: local (default, on the /data volume) or s3.
       # For S3/MinIO set STORAGE=s3 and the S3_* variables below.
       STORAGE: "${STORAGE:-local}"
