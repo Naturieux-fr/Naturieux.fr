@@ -2,15 +2,19 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -202,8 +206,12 @@ func main() {
 		http.ServeFile(w, r, "web/index.html")
 	})
 
-	// Security headers, then CORS (for development cross-origin calls).
-	rootHandler := securityHeaders(corsMiddleware(mux))
+	// Basic request metrics, exposed at /metrics (Prometheus text format).
+	appMetrics := newMetrics()
+	mux.HandleFunc("/metrics", appMetrics.handler)
+
+	// Security headers, then CORS, then metrics around the mux.
+	rootHandler := securityHeaders(corsMiddleware(appMetrics.middleware(mux)))
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -390,4 +398,79 @@ func ensureDemoPlayer(playerRepo ports.PlayerRepository) error {
 		return err
 	}
 	return playerRepo.Create(ctx, demoPlayer)
+}
+
+// appMetricsT holds in-memory request counters exposed at /metrics.
+type appMetricsT struct {
+	start                  time.Time
+	total, errors          atomic.Int64
+	s2xx, s3xx, s4xx, s5xx atomic.Int64
+}
+
+func newMetrics() *appMetricsT { return &appMetricsT{start: time.Now()} }
+
+// middleware counts every request by status class.
+func (m *appMetricsT) middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		m.total.Add(1)
+		switch {
+		case sw.status >= 500:
+			m.s5xx.Add(1)
+			m.errors.Add(1)
+		case sw.status >= 400:
+			m.s4xx.Add(1)
+		case sw.status >= 300:
+			m.s3xx.Add(1)
+		default:
+			m.s2xx.Add(1)
+		}
+	})
+}
+
+// handler exposes the counters in Prometheus text format.
+func (m *appMetricsT) handler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	fmt.Fprintf(w, "naturieux_uptime_seconds %d\n", int64(time.Since(m.start).Seconds()))
+	fmt.Fprintf(w, "naturieux_requests_total %d\n", m.total.Load())
+	fmt.Fprintf(w, "naturieux_requests_errors_total %d\n", m.errors.Load())
+	fmt.Fprintf(w, "naturieux_requests_by_class{class=\"2xx\"} %d\n", m.s2xx.Load())
+	fmt.Fprintf(w, "naturieux_requests_by_class{class=\"3xx\"} %d\n", m.s3xx.Load())
+	fmt.Fprintf(w, "naturieux_requests_by_class{class=\"4xx\"} %d\n", m.s4xx.Load())
+	fmt.Fprintf(w, "naturieux_requests_by_class{class=\"5xx\"} %d\n", m.s5xx.Load())
+}
+
+// statusWriter records the response status while preserving WebSocket hijacking
+// and flushing.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (s *statusWriter) WriteHeader(code int) {
+	if !s.wrote {
+		s.status = code
+		s.wrote = true
+	}
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusWriter) Write(b []byte) (int, error) {
+	s.wrote = true
+	return s.ResponseWriter.Write(b)
+}
+
+func (s *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := s.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("response writer does not support hijacking")
+}
+
+func (s *statusWriter) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
