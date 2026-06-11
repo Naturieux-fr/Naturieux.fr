@@ -10,8 +10,9 @@ services:
       DEV_MODE: "${DEV_MODE:-0}"
       PORT: "8080"
       DB_PATH: "/data/naturieux.db"
-      # Species source: inat (default) | taxref | mock
-      SPECIES_SOURCE: "${SPECIES_SOURCE:-inat}"
+      # Species source. Leave empty to auto-detect: the local TAXREF as soon
+      # as it is imported, otherwise iNaturalist. Force with taxref | inat | mock.
+      SPECIES_SOURCE: "${SPECIES_SOURCE:-}"
       # Admin back-office (set both to enable the /admin account)
       ADMIN_USERNAME: "${ADMIN_USERNAME:-}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
