@@ -8,6 +8,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/application/challenge"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
@@ -120,6 +121,10 @@ func (h *ChallengeHandler) handleFinish(w http.ResponseWriter, r *http.Request) 
 		writeSessionError(w, err)
 		return
 	}
+	if session.Status() != quiz.SessionCompleted {
+		writeError(w, http.StatusConflict, "challenge not finished")
+		return
+	}
 	if h.auth != nil {
 		pid, err := h.auth.Authenticate(bearerToken(r))
 		if err != nil || pid == "" {
@@ -143,6 +148,8 @@ func (h *ChallengeHandler) handleFinish(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.mgr.Release(req.SessionID) // binding no longer needed once recorded
 
 	board, _ := h.scores.Leaderboard(r.Context(), string(period), key, 20)
 	writeSuccess(w, map[string]interface{}{

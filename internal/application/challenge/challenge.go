@@ -157,6 +157,14 @@ func (m *Manager) Bind(sessionID string, p Period, key string) {
 	m.binding[sessionID] = string(p) + ":" + key
 }
 
+// Release forgets a session→challenge binding once the run is recorded, so the
+// binding map does not grow without bound.
+func (m *Manager) Release(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.binding, sessionID)
+}
+
 // Lookup returns the challenge a session belongs to.
 func (m *Manager) Lookup(sessionID string) (Period, string, bool) {
 	m.mu.Lock()

@@ -320,6 +320,9 @@ func (h *Handler) HandleAbandonSession(w http.ResponseWriter, r *http.Request) {
 		writeSessionError(w, err)
 		return
 	}
+	if !h.ownsSession(w, r, session) {
+		return
+	}
 
 	if err := h.quizService.AbandonSession(r.Context(), session); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
