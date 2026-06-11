@@ -83,6 +83,9 @@ func (f *questionFactory) CreateQuestion(
 	if quizType == quiz.SoundQuiz {
 		return f.createSoundQuestion(ctx, difficulty)
 	}
+	if quizType == quiz.FamilyQuiz {
+		return f.createFamilyQuestion(ctx, difficulty)
+	}
 
 	// The per-session category takes precedence over the factory default.
 	taxon := taxonFilter
@@ -169,6 +172,61 @@ func (f *questionFactory) createSoundQuestion(ctx context.Context, difficulty qu
 		return nil, err
 	}
 	question.SetMediaCredit(attribution, license)
+	return question, nil
+}
+
+// familySource is satisfied by the TAXREF repository: it supplies species from
+// other families to build "family" quiz distractors.
+type familySource interface {
+	GetOtherFamilies(ctx context.Context, speciesID, limit int) ([]*species.Species, error)
+}
+
+// createFamilyQuestion builds a question where the player names the family of
+// the pictured species; the choices are distinct families.
+func (f *questionFactory) createFamilyQuestion(ctx context.Context, difficulty quiz.Difficulty) (*quiz.Question, error) {
+	src, ok := f.speciesRepo.(familySource)
+	if !ok {
+		return nil, errors.New("family quiz unavailable for this species source")
+	}
+	picks, err := f.speciesRepo.GetRandom(ctx, ports.SpeciesFilter{
+		PlaceID:    f.placeID,
+		Limit:      1,
+		HasPhotos:  true,
+		Difficulty: string(difficulty),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting correct species: %w", err)
+	}
+	if len(picks) == 0 || picks[0].Family() == "" || !picks[0].HasPhotos() {
+		return nil, errors.New("no suitable species for a family question")
+	}
+	correct := picks[0]
+
+	config := quiz.DefaultDifficultyConfigs()[difficulty]
+	others, err := src.GetOtherFamilies(ctx, correct.ID(), config.ChoicesCount-1)
+	if err != nil {
+		return nil, fmt.Errorf("getting other families: %w", err)
+	}
+	if len(others) == 0 {
+		return nil, errors.New("not enough families for distractors")
+	}
+
+	choices := make([]quiz.Choice, 0, config.ChoicesCount)
+	choices = append(choices, quiz.Choice{Species: correct, IsCorrect: true})
+	for _, o := range others {
+		choices = append(choices, quiz.Choice{Species: o, IsCorrect: false})
+	}
+	rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
+
+	mediaURL, mediaPhoto := f.selectMedia(correct, quiz.FamilyQuiz)
+	question, err := quiz.NewQuestion(uuid.New().String(), quiz.FamilyQuiz, difficulty, correct, choices, mediaURL)
+	if err != nil {
+		return nil, err
+	}
+	if mediaPhoto != nil {
+		question.SetMediaCredit(mediaPhoto.Attribution, mediaPhoto.LicenseCode)
+		question.SetMediaZoom(mediaPhoto.Zoom)
+	}
 	return question, nil
 }
 
@@ -311,7 +369,7 @@ func (f *questionFactory) selectMedia(sp *species.Species, quizType quiz.QuizTyp
 	photo := photos[0]
 
 	switch quizType {
-	case quiz.ImageQuiz:
+	case quiz.ImageQuiz, quiz.FamilyQuiz:
 		return firstNonEmpty(photo.LargeURL, photo.MediumURL, photo.URL), &photo
 	case quiz.FlashQuiz:
 		// Use medium for faster loading

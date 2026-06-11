@@ -174,6 +174,7 @@ type QuestionDTO struct {
 type ChoiceDTO struct {
 	SpeciesID   int    `json:"species_id"`
 	DisplayName string `json:"display_name"`
+	Family      string `json:"family,omitempty"`
 }
 
 // SubmitAnswerRequest represents a request to submit an answer.
@@ -423,6 +424,7 @@ func questionToDTO(q *quiz.Question) QuestionDTO {
 		choices[i] = ChoiceDTO{
 			SpeciesID:   c.Species.ID(),
 			DisplayName: c.Species.DisplayName(),
+			Family:      c.Species.Family(),
 		}
 	}
 

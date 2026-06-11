@@ -259,7 +259,7 @@ type rowScanner interface {
 }
 
 // speciesColumns is the column list scanned by scanSpecies.
-const speciesColumns = "cd_nom, scientific_name, vernacular_name, taxa_group, kingdom"
+const speciesColumns = "cd_nom, scientific_name, vernacular_name, taxa_group, kingdom, family"
 
 // scanSpecies reads the standard species columns and builds a domain Species.
 func (r *Repository) scanSpecies(row rowScanner) (*species.Species, error) {
@@ -268,8 +268,9 @@ func (r *Repository) scanSpecies(row rowScanner) (*species.Species, error) {
 		scientific     string
 		vernacular     string
 		group, kingdom string
+		family         string
 	)
-	if err := row.Scan(&cdNom, &scientific, &vernacular, &group, &kingdom); err != nil {
+	if err := row.Scan(&cdNom, &scientific, &vernacular, &group, &kingdom, &family); err != nil {
 		return nil, err
 	}
 
@@ -278,7 +279,38 @@ func (r *Repository) scanSpecies(row rowScanner) (*species.Species, error) {
 		return nil, fmt.Errorf("taxref build species %d: %w", cdNom, err)
 	}
 	sp.SetRank("species")
+	sp.SetFamily(family)
 	return sp, nil
+}
+
+// GetOtherFamilies returns species from families different from the given
+// species' family — one per family, preferring the same broad group — to build
+// distractors for the "family" quiz.
+func (r *Repository) GetOtherFamilies(ctx context.Context, speciesID, limit int) ([]*species.Species, error) {
+	if limit <= 0 {
+		limit = 7
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+speciesColumns+` FROM taxref_species
+		WHERE cd_nom != ? AND family != ''
+		  AND family != (SELECT family FROM taxref_species WHERE cd_nom = ?)
+		GROUP BY family
+		ORDER BY (taxa_group = (SELECT taxa_group FROM taxref_species WHERE cd_nom = ?)) DESC, RANDOM()
+		LIMIT ?`, speciesID, speciesID, speciesID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("taxref other families: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]*species.Species, 0, limit)
+	for rows.Next() {
+		sp, err := r.scanSpecies(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sp)
+	}
+	return out, rows.Err()
 }
 
 // attachPhotos loads the owned photos for a species, including any zoom region

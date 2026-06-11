@@ -188,7 +188,8 @@ function quizApp() {
             { id: 'flash', name: 'Éclair', desc: 'un bref instant' },
             { id: 'silhouette', name: 'Silhouette', desc: 'forme sombre' },
             { id: 'partial', name: 'Détail', desc: 'gros plan' },
-            { id: 'sound', name: 'Chant', desc: 'au son (oiseaux)' }
+            { id: 'sound', name: 'Chant', desc: 'au son (oiseaux)' },
+            { id: 'family', name: 'Famille', desc: 'trouve la famille' }
         ],
 
         answerModes: [
@@ -1114,6 +1115,7 @@ function quizApp() {
         // The answer UI follows the room's mode in multiplayer, the local
         // setting in solo.
         get activeAnswerMode() {
+            if (this.quizType === 'family') return 'choices'; // family is always multiple-choice
             return this.inRoom ? this.room.answerMode : this.settings.answerMode;
         },
 

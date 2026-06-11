@@ -14,6 +14,7 @@ const (
 	PartialQuiz    QuizType = "partial"    // Only part of image visible
 	SilhouetteQuiz QuizType = "silhouette" // Silhouette only
 	SoundQuiz      QuizType = "sound"      // Audio only
+	FamilyQuiz     QuizType = "family"     // Image visible, answer the family
 )
 
 // Difficulty represents quiz difficulty levels.
@@ -72,7 +73,7 @@ func DefaultDifficultyConfigs() map[Difficulty]DifficultyConfig {
 // IsValidQuizType checks if a quiz type is valid.
 func IsValidQuizType(qt QuizType) bool {
 	switch qt {
-	case ImageQuiz, FlashQuiz, PartialQuiz, SilhouetteQuiz, SoundQuiz:
+	case ImageQuiz, FlashQuiz, PartialQuiz, SilhouetteQuiz, SoundQuiz, FamilyQuiz:
 		return true
 	}
 	return false

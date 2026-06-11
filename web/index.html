@@ -594,7 +594,7 @@
                     <figcaption class="mount-caption" x-show="question.mediaAttribution" x-text="question.mediaAttribution"></figcaption>
                 </figure>
 
-                <p class="determine" x-text="quizType === 'sound' ? 'Quel est ce chant ?' : 'Quelle est cette espèce ?'"></p>
+                <p class="determine" x-text="quizType === 'sound' ? 'Quel est ce chant ?' : (quizType === 'family' ? 'À quelle famille appartient cette espèce ?' : 'Quelle est cette espèce ?')"></p>
 
                 <!-- Réponse à choix -->
                 <div class="key-list" x-show="activeAnswerMode === 'choices'">
@@ -608,7 +608,7 @@
                                 }"
                                 @click="submitAnswer(choice.species_id)" :disabled="showFeedback">
                             <span class="key-letter" x-text="String.fromCharCode(97 + i)"></span>
-                            <span class="key-name" x-text="choice.display_name"></span>
+                            <span class="key-name" x-text="quizType === 'family' ? (choice.family || choice.display_name) : choice.display_name"></span>
                         </button>
                     </template>
                 </div>
@@ -737,7 +737,7 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.8"></script>
+    <script src="/static/js/app.js?v=3.9"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

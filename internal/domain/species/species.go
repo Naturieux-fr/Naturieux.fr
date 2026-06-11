@@ -60,6 +60,7 @@ type Species struct {
 	scientificName string
 	commonName     string
 	iconicTaxon    string
+	family         string
 	photos         []Photo
 	ancestorIDs    []int
 	rank           string
@@ -197,6 +198,12 @@ func (s *Species) GenusID() int {
 }
 
 // SetRank sets the taxonomic rank.
+// Family returns the taxonomic family (may be empty).
+func (s *Species) Family() string { return s.family }
+
+// SetFamily sets the taxonomic family.
+func (s *Species) SetFamily(family string) { s.family = family }
+
 func (s *Species) SetRank(rank string) {
 	s.rank = rank
 }
@@ -213,6 +220,7 @@ type Snapshot struct {
 	ScientificName string  `json:"scientific_name"`
 	CommonName     string  `json:"common_name"`
 	IconicTaxon    string  `json:"iconic_taxon"`
+	Family         string  `json:"family,omitempty"`
 	Rank           string  `json:"rank"`
 	AncestorIDs    []int   `json:"ancestor_ids,omitempty"`
 	Photos         []Photo `json:"photos,omitempty"`
@@ -225,6 +233,7 @@ func (s *Species) Snapshot() Snapshot {
 		ScientificName: s.scientificName,
 		CommonName:     s.commonName,
 		IconicTaxon:    s.iconicTaxon,
+		Family:         s.family,
 		Rank:           s.rank,
 		AncestorIDs:    s.ancestorIDs,
 		Photos:         s.photos,
@@ -238,6 +247,7 @@ func FromSnapshot(snap Snapshot) (*Species, error) {
 		return nil, err
 	}
 	sp.SetRank(snap.Rank)
+	sp.SetFamily(snap.Family)
 	sp.SetAncestorIDs(snap.AncestorIDs)
 	for _, p := range snap.Photos {
 		sp.AddPhoto(p)
