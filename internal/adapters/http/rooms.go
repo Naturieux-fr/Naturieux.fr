@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
+
 	"github.com/Naturieux-fr/Naturieux.fr/internal/application/room"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
 )
@@ -31,6 +34,61 @@ func (h *RoomHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/rooms/{code}/answer", h.handleAnswer)
 	mux.HandleFunc("POST /api/v1/rooms/{code}/guess", h.handleGuess)
 	mux.HandleFunc("GET /api/v1/rooms/{code}/image", h.handleImage)
+	mux.HandleFunc("GET /api/v1/rooms/{code}/ws", h.handleSocket)
+}
+
+// handleSocket streams live room state to a client over WebSocket. Mutations
+// still go through the POST endpoints; this connection is push-only.
+func (h *RoomHandler) handleSocket(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	if _, err := h.rooms.Snapshot(code); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// nil options keep the default same-origin check (the SPA and API share an
+	// origin), preventing cross-site WebSocket hijacking.
+	c, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer c.CloseNow()
+	ctx := r.Context()
+
+	id, updates, err := h.rooms.Subscribe(code)
+	if err != nil {
+		return
+	}
+	defer h.rooms.Unsubscribe(code, id)
+
+	// Detect a client-side close so we stop pushing.
+	go func() {
+		for {
+			if _, _, err := c.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Push the current state immediately, then every change.
+	if st, err := h.rooms.Snapshot(code); err == nil {
+		if wsjson.Write(ctx, c, st) != nil {
+			return
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case st, ok := <-updates:
+			if !ok {
+				return
+			}
+			if wsjson.Write(ctx, c, st) != nil {
+				return
+			}
+		}
+	}
 }
 
 func (h *RoomHandler) handleCreate(w http.ResponseWriter, r *http.Request) {

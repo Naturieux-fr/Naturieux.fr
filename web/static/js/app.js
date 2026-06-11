@@ -16,6 +16,8 @@ function quizApp() {
         joinCode: '',
         room: { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' },
         roomToken: '',
+        roomSocket: null,
+        _wsRetry: null,
         roomMode: 'classic',
         roomModes: [
             { id: 'classic', name: 'Classique', desc: 'le meilleur score gagne' },
@@ -146,9 +148,10 @@ function quizApp() {
 
         // Initialize
         init() {
-            this.loadPlayer();
             this.setTimeLimit();
             this.loadConfig();
+            // Resume an in-progress duel after the profile is loaded.
+            this.loadPlayer().then(() => this.resumeRoom());
         },
 
         // Load server config
@@ -636,32 +639,108 @@ function quizApp() {
             } catch (e) { this.error = e.message; }
         },
 
+        // Live sync: a WebSocket pushes state instantly; a slow poll is the
+        // fallback that also drives reconnection.
         startRoomPolling() {
             this.stopRoomPolling();
-            this.roomPoll = setInterval(() => this.pollRoom(), 1500);
+            this.connectRoomSocket();
+            this.roomPoll = setInterval(() => this.pollRoom(), 4000);
             this.pollRoom();
+            this.saveRoomSession();
         },
         stopRoomPolling() {
             if (this.roomPoll) { clearInterval(this.roomPoll); this.roomPoll = null; }
+            this.closeRoomSocket();
+        },
+
+        connectRoomSocket() {
+            if (!this.room.code) return;
+            this.closeRoomSocket();
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            try {
+                const ws = new WebSocket(`${proto}://${location.host}/api/v1/rooms/${this.room.code}/ws`);
+                this.roomSocket = ws;
+                ws.onmessage = (ev) => { try { this.applyRoomState(JSON.parse(ev.data)); } catch (e) {} };
+                ws.onerror = () => { try { ws.close(); } catch (e) {} };
+                ws.onclose = () => {
+                    if (this.roomSocket !== ws) return;
+                    this.roomSocket = null;
+                    // Auto-reconnect while the room is still live.
+                    if (this.room.code && this.room.status !== 'finished') {
+                        this._wsRetry = setTimeout(() => this.connectRoomSocket(), 2000);
+                    }
+                };
+            } catch (e) { /* fall back to polling */ }
+        },
+        closeRoomSocket() {
+            if (this._wsRetry) { clearTimeout(this._wsRetry); this._wsRetry = null; }
+            if (this.roomSocket) {
+                try { this.roomSocket.onclose = null; this.roomSocket.close(); } catch (e) {}
+                this.roomSocket = null;
+            }
         },
 
         async pollRoom() {
             if (!this.room.code) return;
             try {
                 const data = await this.api(`/rooms/${this.room.code}?player_id=${this.player.id}`, 'GET');
-                const wasStatus = this.room.status;
-                this.applyRoom(data.room);
+                this.applyRoomState(data.room, data.your_question);
+            } catch (e) { /* transient: keep the socket / next poll */ }
+        },
 
-                // Game just started: enter the quiz with our first question.
-                if (this.room.status === 'playing' && wasStatus !== 'playing' && data.your_question) {
-                    this.beginRoomQuiz(data.your_question);
+        // Unified handler for a room snapshot from either transport.
+        applyRoomState(state, yourQuestion) {
+            if (!state) return;
+            const wasStatus = this.room.status;
+            this.applyRoom(state);
+
+            if (this.room.status === 'playing' && wasStatus !== 'playing' && !this.inRoom) {
+                if (yourQuestion) this.beginRoomQuiz(yourQuestion);
+                else this.fetchMyQuestion();
+            }
+            if (this.room.status === 'finished') {
+                this.stopRoomPolling();
+                this.clearRoomSession();
+                if (this.screen !== 'mp-podium') this.screen = 'mp-podium';
+            }
+        },
+
+        async fetchMyQuestion() {
+            try {
+                const d = await this.api(`/rooms/${this.room.code}?player_id=${this.player.id}`, 'GET');
+                if (d.your_question) this.beginRoomQuiz(d.your_question);
+            } catch (e) {}
+        },
+
+        // Persist the active room so a reload can resume it.
+        saveRoomSession() {
+            if (this.room.code && this.roomToken) {
+                localStorage.setItem('naturieux_room', JSON.stringify({ code: this.room.code, token: this.roomToken }));
+            }
+        },
+        clearRoomSession() { localStorage.removeItem('naturieux_room'); },
+
+        async resumeRoom() {
+            const saved = localStorage.getItem('naturieux_room');
+            if (!saved || !this.player.id) return;
+            let s;
+            try { s = JSON.parse(saved); } catch (e) { this.clearRoomSession(); return; }
+            if (!s.code || !s.token) { this.clearRoomSession(); return; }
+            try {
+                const data = await this.api(`/rooms/${s.code}?player_id=${this.player.id}`, 'GET');
+                const inIt = (data.room.players || []).some(p => p.id === this.player.id);
+                if (!inIt || data.room.status === 'finished') { this.clearRoomSession(); return; }
+                this.room.code = s.code;
+                this.roomToken = s.token;
+                this.applyRoom(data.room);
+                if (data.room.status === 'lobby') {
+                    this.screen = 'mp-lobby';
+                } else if (data.room.status === 'playing') {
+                    if (data.your_question) this.beginRoomQuiz(data.your_question);
+                    else this.screen = 'mp-podium'; // already finished my questions; awaiting others
                 }
-                // Everyone finished.
-                if (this.room.status === 'finished') {
-                    this.stopRoomPolling();
-                    if (this.screen !== 'mp-podium') this.screen = 'mp-podium';
-                }
-            } catch (e) { /* keep polling; transient errors are fine */ }
+                this.startRoomPolling();
+            } catch (e) { this.clearRoomSession(); }
         },
 
         applyRoom(r) {
@@ -741,8 +820,10 @@ function quizApp() {
 
         leaveRoom() {
             this.stopRoomPolling();
+            this.clearRoomSession();
             this.inRoom = false;
-            this.room = { code: '', status: '', players: [], total: 0, hostId: '' };
+            this.roomToken = '';
+            this.room = { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
             this.goHome();
         },
 

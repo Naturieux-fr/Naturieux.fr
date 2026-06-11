@@ -93,6 +93,8 @@ type Room struct {
 	players   []*player
 	created   time.Time
 	activity  time.Time
+	subs      map[int]chan State // live subscribers (WebSocket)
+	subSeq    int
 }
 
 // Manager owns all live rooms.
@@ -192,9 +194,11 @@ func (m *Manager) Join(code, playerID, playerName string) (*Room, string, error)
 	if p := r.find(playerID); p != nil {
 		p.name = playerName
 		p.token = token
+		r.broadcastLocked()
 		return r, token, nil
 	}
 	r.players = append(r.players, &player{id: playerID, name: playerName, token: token, lastSeen: m.now()})
+	r.broadcastLocked()
 	return r, token, nil
 }
 
@@ -246,6 +250,7 @@ func (m *Manager) Start(ctx context.Context, code, token string) error {
 		p.since = now
 	}
 	r.touch(now)
+	r.broadcastLocked()
 	return nil
 }
 
@@ -365,6 +370,7 @@ func (r *Room) record(p *player, q *quiz.Question, correct bool, now time.Time) 
 	if r.allDone() {
 		r.status = Done
 	}
+	r.broadcastLocked()
 	return res
 }
 
@@ -411,7 +417,11 @@ func (m *Manager) Snapshot(code string) (State, error) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.snapshotLocked(), nil
+}
 
+// snapshotLocked builds the public room state. Caller holds r.mu.
+func (r *Room) snapshotLocked() State {
 	players := make([]PlayerState, len(r.players))
 	for i, p := range r.players {
 		players[i] = PlayerState{
@@ -446,7 +456,63 @@ func (m *Manager) Snapshot(code string) (State, error) {
 			Mode:        string(r.settings.Mode),
 			AnswerMode:  r.settings.AnswerMode,
 		},
-	}, nil
+	}
+}
+
+// Subscribe registers a live listener for a room and returns its id and a
+// channel of state snapshots. Call Unsubscribe with the id when done.
+func (m *Manager) Subscribe(code string) (int, <-chan State, error) {
+	r, err := m.Get(code)
+	if err != nil {
+		return 0, nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.subs == nil {
+		r.subs = make(map[int]chan State)
+	}
+	r.subSeq++
+	id := r.subSeq
+	ch := make(chan State, 1)
+	r.subs[id] = ch
+	return id, ch, nil
+}
+
+// Unsubscribe removes a live listener.
+func (m *Manager) Unsubscribe(code string, id int) {
+	r, err := m.Get(code)
+	if err != nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if ch, ok := r.subs[id]; ok {
+		delete(r.subs, id)
+		close(ch)
+	}
+}
+
+// broadcastLocked pushes the current state to every subscriber, keeping only
+// the latest snapshot per slow consumer. Caller holds r.mu.
+func (r *Room) broadcastLocked() {
+	if len(r.subs) == 0 {
+		return
+	}
+	st := r.snapshotLocked()
+	for _, ch := range r.subs {
+		select {
+		case ch <- st:
+		default:
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- st:
+			default:
+			}
+		}
+	}
 }
 
 // rankBefore reports whether a should rank above b: survivors first, then by
@@ -482,6 +548,12 @@ func (m *Manager) Cleanup(ttl time.Duration) {
 	for code, r := range m.rooms {
 		r.mu.Lock()
 		idle := r.activity.Before(cutoff)
+		if idle {
+			for id, ch := range r.subs {
+				delete(r.subs, id)
+				close(ch)
+			}
+		}
 		r.mu.Unlock()
 		if idle {
 			delete(m.rooms, code)
