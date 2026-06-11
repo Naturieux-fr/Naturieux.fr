@@ -1,56 +1,76 @@
 # 02 — Reste à faire
 
-*Roadmap priorisée. Mise à jour : 2026-06-09. Voir [01 — État du projet](01-etat-du-projet.md) pour le contexte.*
+*Roadmap priorisée. Mise à jour : 2026-06-11. Voir [01 — État du projet](01-etat-du-projet.md) pour le contexte.*
+
+## Fait depuis le 09/06 (résumé)
+
+Beaucoup de la liste P1/P2 a été livré : tous les **types de quiz** sauf le son
+(Image, Éclair, Silhouette, Détail) + **réponse libre**, le **multijoueur**
+temps réel (salons, modes Classique/Élimination, manches synchronisées,
+WebSocket + reconnexion), les **vrais comptes** (mot de passe, inscription
+libre ou sur invitation), la **gamification** (combos, toasts, série
+quotidienne, **grades à paliers** par spécialité), l'**import photos en masse**,
+la **conversion RAW→JPEG**, **MinIO** dans compose, l'auto-détection de la
+source TAXREF, le **SRI** sur le CDN, le nettoyage des fichiers orphelins, et
+l'**identité visuelle** (logo + favicon).
 
 ## P0 — Critique (conformité et fondations)
 
-- [x] **Filtrage des licences photos** : `photo_license=cc0,cc-by,cc-by-nc` sur les requêtes observations + filtre défensif côté client (photo par défaut du taxon exclue de l'affichage). Reste à faire pour les **sons** (`sound_license`) quand le SoundQuiz arrivera.
-- [x] **Attribution des médias** : `license_code` + `attribution` portés jusqu'à l'API (`media_attribution`, `media_license`) et affichés sous l'image du quiz. Amélioration possible : lien vers l'observation d'origine.
-- [x] **Persistance SQLite** : `internal/adapters/sqlite` (driver pur Go `modernc.org/sqlite`), sessions stockées en snapshot JSON + colonnes dénormalisées pour les stats, joueurs persistés (XP, niveaux, achievements). Le store en mémoire du handler est supprimé : les parties survivent à un redémarrage du serveur. Variable `DB_PATH` (défaut `naturieux.db`).
-- [x] **Cache local des espèces** : `internal/adapters/cache` (décorateur SQLite autour du client iNaturalist). Préchauffage ~60 espèces/taxon au démarrage + toutes les 12 h (1 requête/taxon), TTL 7 jours, dégradation gracieuse vers l'API. Démarrage d'une partie : ~8-10 s → < 25 ms. Reste possible : back-off explicite sur 429 côté client.
+- [x] **Filtrage des licences photos** + filtre défensif client. (Sons : à faire avec le SoundQuiz.)
+- [x] **Attribution des médias** affichée sous l'image. (Amélioration : lien vers l'observation d'origine.)
+- [x] **Persistance SQLite** (`internal/adapters/sqlite`, driver pur Go). `DB_PATH`.
+- [x] **Cache local des espèces** (`internal/adapters/cache`, préchauffage + TTL 7 j).
 
 ## P1 — Important (expérience de jeu)
 
-- [x] **Comptes utilisateurs simples** : `POST /api/v1/players` (pseudo unique 2-20 caractères) + `GET /api/v1/players/{id}`, identifiant conservé en localStorage, formulaire de bienvenue au premier lancement. Le serveur est la source de vérité de l'XP/niveaux. Évolution possible : récupération de compte (code secret ou e-mail).
-- [x] **Leaderboard** : endpoint `GET /api/v1/leaderboard` (classement par XP, paramètre `limit`) + écran frontend (médailles top 3, niveau, parties, précision). Évolution possible : classement par taxon ou par période.
-- [ ] **Quiz types restants côté frontend** :
-  - Flash : déjà côté API (durée d'affichage), finaliser l'UI.
-  - Partial : recadrage CSS (zoom sur une zone de la photo).
-  - Silhouette : filtre CSS (`brightness(0)` sur fond clair) — à valider visuellement.
-  - Sound : nécessite `sounds=true` côté client iNaturalist + lecteur audio ; compléter avec Xeno-canto pour les oiseaux (clé API requise depuis oct. 2025).
-- [ ] **Filtres avancés** : choix du groupe taxonomique (oiseaux, mammifères, plantes, champignons…), du lieu (région/département), de la saison.
-- [ ] **Affichage des achievements et niveaux** dans l'UI (le domaine gamification existe déjà).
+- [x] **Comptes utilisateurs** : passés de simples pseudos à de **vrais comptes** — mot de passe bcrypt, jeton de session, **inscription libre ou sur invitation** (`REGISTRATION_MODE`, liens admin). `internal/application/account`.
+- [x] **Leaderboard** (`GET /api/v1/leaderboard` + écran). (Évolution : par taxon / période.)
+- [x] **Types de quiz** : Image, **Éclair**, **Silhouette**, **Détail** + **réponse libre** (3 essais). Sélecteurs sur l'accueil et dans les salons.
+  - [ ] **Son** : reste à faire — `sounds=true` côté iNaturalist + lecteur audio, ou **Xeno-canto** pour les oiseaux (clé API requise depuis oct. 2025).
+- [ ] **Filtres avancés** : la **catégorie taxonomique** est faite ; restent le **lieu** (région/département) et la **saison**.
+- [x] **Affichage des achievements et grades** : écran « Cabinet des hauts faits » (galerie débloqués/verrouillés) + **grades de spécialité à paliers** (Mammalogiste, Ornithologue… I/II/III à 100/500/2000) + toasts temps réel.
 
 ## Source de données TAXREF (indépendance iNaturalist)
 
-- [x] **Référentiel TAXREF local** : `internal/adapters/taxref` (dépôt SQLite implémentant `ports.SpeciesRepository`). Importeur Darwin Core (`cmd/importtaxref`), 212k espèces valides chargées en ~2,7 s. Sélectionnable par `SPECIES_SOURCE=taxref`. Voir [05 — TAXREF & photos](05-taxref-et-photos.md).
-- [x] **Photos « à nous »** : table `taxref_photos` liée par `cd_nom`, alimentée par notre propre collection (`Repository.AddPhoto`). Plus de dépendance iNaturalist pour les images en mode taxref.
-- [x] **Back-office admin des photos** : page `/admin` (auth par rôle, mots de passe bcrypt, jeton HMAC) pour chercher une espèce, ajouter/supprimer des photos liées par `cd_nom` et régler leur **difficulté** (utilisée par le tirage du quiz). Upload de fichier (stockage **local** ou **S3/MinIO** via `STORAGE`) ou URL externe. Admin seedé par `ADMIN_USERNAME`/`ADMIN_PASSWORD`.
-- [ ] **Import en masse des photos** : commande/écran pour charger une collection entière (CSV cd_nom→fichier/url) d'un coup, au lieu d'une par une.
-- [ ] **SRI sur les CDN** : ajouter `integrity`/`crossorigin` sur Alpine.js (index.html + admin.html) ou auto-héberger la lib.
-- [ ] **Nettoyage fichiers orphelins** : supprimer le fichier stocké quand on supprime une photo locale (aujourd'hui seul l'enregistrement part).
-- [x] **Conversion RAW → JPEG** : `internal/media` extrait l'aperçu JPEG pleine taille embarqué dans les RAW (.RW2…) en Go pur, sans dépendance externe ; `cmd/importphotos` convertit à la volée (4 `.RW2` → JPEG 1920×1440).
-- [ ] **Présence métropole** : la version GBIF de TAXREF ne porte pas la colonne de présence territoriale (`FR`) ; pour filtrer strictement la métropole, croiser avec l'extrait INPN ou les statuts. Actuellement tous les taxons valides sont inclus.
+- [x] **Référentiel TAXREF local** (`internal/adapters/taxref`, importeur natif `cmd/importtaxref`, 212k espèces). `SPECIES_SOURCE=taxref` (auto-détecté dès qu'une base est chargée).
+- [x] **Photos « à nous »** (table `taxref_photos` liée par `cd_nom`).
+- [x] **Back-office admin des photos** (`/admin`, auth rôle/bcrypt/HMAC, upload local ou S3/MinIO).
+- [x] **Import en masse des photos** : `cmd/importphotos` (CSV `photo;groupe;nom_scientifique`, résolution cd_nom, conversion RAW).
+- [x] **SRI sur les CDN** : `integrity`/`crossorigin` sur Alpine.js (index + admin).
+- [x] **Nettoyage fichiers orphelins** : la suppression d'une photo retire aussi le fichier stocké.
+- [x] **Conversion RAW → JPEG** (`internal/media`, aperçu embarqué, Go pur).
+- [x] **Présence métropole** : colonne `FR` du TAXREF natif ; les distracteurs préfèrent les espèces présentes en métropole.
+
+## Multijoueur
+
+- [x] **Salons de duel** : création + code à 4 lettres, jointure, hôte qui lance (`internal/application/room`).
+- [x] **Manches synchronisées** : tout le monde répond à la même question, avance automatique quand tous ont répondu, podium commun.
+- [x] **Modes** : Classique et **Élimination** (mort subite).
+- [x] **Temps réel WebSocket** (`coder/websocket`) + repli polling + **reconnexion** (reprise lobby/partie après rechargement).
+- [x] **Sécurité** : jeton secret par joueur (anti-usurpation), timing serveur, nombre de questions plafonné.
+- [ ] **Évolutions** : mode spectateur, salons publics/liste, keep-alive WebSocket mobile.
 
 ## P2 — Améliorations
 
-- [ ] **Migration API v2 iNaturalist** : sélection de champs (`fields`), UUID — la v1 fonctionne mais la v2 est la version pérenne (pertinent seulement si on garde iNaturalist en source d'appoint).
-- [ ] **Tests E2E frontend** automatisés (Playwright) intégrés à la CI.
-- [ ] **WebSocket** : mode duel / multijoueur en temps réel.
+- [ ] **Quiz Son** (voir P1) — chants d'oiseaux Xeno-canto.
 - [ ] **Mode révision** : revoir les espèces ratées (répétition espacée).
-- [ ] **i18n** : noms vernaculaires français via `locale=fr` (paramètre API), fallback nom scientifique.
 - [ ] **PWA** : manifest + service worker pour usage mobile/terrain.
+- [ ] **Récupération de compte** : mot de passe oublié (nécessite e-mail).
+- [ ] **Migration API v2 iNaturalist** (pertinent seulement si on garde iNaturalist en appoint).
+- [ ] **Tests E2E frontend** (Playwright) intégrés à la CI.
+- [ ] **i18n** : déjà des noms français via TAXREF ; généraliser le fallback.
 
 ## P3 — Déploiement
 
-- [x] **Conteneurisation** : Dockerfile multi-stage (binaire statique CGO-free sur alpine, non-root, healthcheck `/health`, volume `/data` pour la base) + `docker-compose.yml`. `docker compose up` lance l'app.
-- [ ] **Hébergement naturieux.fr** : reverse proxy + TLS, variable `PORT`, logs.
-- [ ] **Page mentions légales** : crédits iNaturalist, licences des médias, politique de confidentialité.
-- [ ] **Monitoring** : métriques basiques (sessions/jour, taux d'erreur API iNaturalist).
+- [x] **Conteneurisation** : Dockerfile multi-stage + `docker-compose.yml` (+ profil `minio`).
+- [ ] **Hébergement naturieux.fr** : reverse proxy + **TLS/HTTPS**, `AUTH_SECRET` fixe, `PORT`, logs.
+- [ ] **Page mentions légales / confidentialité** : crédits iNaturalist + TAXREF, licences des médias, RGPD (comptes & mots de passe stockés).
+- [ ] **Monitoring** : métriques basiques (parties/jour, taux d'erreur API).
 
 ## Dette technique
 
-- [x] Store de sessions déplacé hors du handler HTTP (service + repository SQLite).
-- [x] Repo joueurs en mémoire de `cmd/server` supprimé (remplacé par SQLite).
-- [ ] Couverture handlers HTTP < 60 % : tester les chemins succès avec un service mocké (injecter une interface au lieu de `*appquiz.Service`).
-- [ ] Harmoniser fins de ligne (warnings LF/CRLF sous Windows) via `.gitattributes`.
+- [x] Store de sessions hors du handler (service + repo SQLite).
+- [x] Repo joueurs en mémoire supprimé (SQLite).
+- [ ] **`.gitattributes`** : harmoniser les fins de ligne (warnings LF/CRLF sous Windows).
+- [ ] Couverture handlers HTTP : tester davantage les chemins succès avec service mocké.
+- [ ] `golangci-lint` local : ne tourne pas (binaire go1.24 < cible 1.25) ; la CI l'exécute en `latest`.
