@@ -37,10 +37,32 @@ function quizApp() {
             xpPercent: 0,
             totalXp: 0,
             totalGames: 0,
-            bestStreak: 0
+            bestStreak: 0,
+            dailyStreak: 0,
+            achievements: []
         },
         usernameInput: '',
         registering: false,
+
+        // Toasts (achievements, level-ups, daily streak)
+        toasts: [],
+        _toastSeq: 0,
+        _preGame: null,
+        achLabels: {
+            first_game: ['🌱', 'Première sortie'],
+            veteran: ['🎖️', 'Vétéran — 100 parties'],
+            dedicated: ['🔥', 'Assidu — 7 jours d\'affilée'],
+            perfect_score: ['💯', 'Sans-faute'],
+            streak_master: ['⚡', 'Série de 10'],
+            level_ten: ['🌿', 'Niveau 10'],
+            level_fifty: ['🌳', 'Niveau 50'],
+            mammal_expert: ['🦊', 'Expert des mammifères'],
+            bird_watcher: ['🦉', 'Ornithologue'],
+            bug_hunter: ['🐝', 'Entomologiste'],
+            botanist: ['🌸', 'Botaniste'],
+            expert_mode: ['🧭', 'Épreuve experte'],
+            master_natural: ['👑', 'Maître naturaliste']
+        },
 
         // Settings
         settings: {
@@ -214,6 +236,8 @@ function quizApp() {
             this.player.totalXp = data.total_xp;
             this.player.totalGames = data.total_games;
             this.player.bestStreak = data.best_streak;
+            this.player.dailyStreak = data.daily_streak || 0;
+            this.player.achievements = data.achievements || [];
             this.updateXpPercent();
         },
 
@@ -282,11 +306,35 @@ function quizApp() {
             return data.data;
         },
 
+        // Show a transient toast (auto-dismissed).
+        pushToast(icon, title, text) {
+            const id = ++this._toastSeq;
+            this.toasts.push({ id, icon, title, text });
+            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4500);
+        },
+
+        // Compare the profile before/after a game and celebrate progress.
+        celebrateProgress(before) {
+            if (!before) return;
+            if (this.player.level > before.level) {
+                this.pushToast('✦', 'Niveau supérieur', `Vous voici naturaliste de grade ${this.player.level}`);
+            }
+            const fresh = (this.player.achievements || []).filter(a => !before.achievements.includes(a));
+            for (const a of fresh) {
+                const [icon, label] = this.achLabels[a] || ['🏅', a];
+                this.pushToast(icon, 'Haut fait débloqué', label);
+            }
+            if (this.player.dailyStreak > before.dailyStreak && this.player.dailyStreak >= 2) {
+                this.pushToast('🔥', 'Série quotidienne', `${this.player.dailyStreak} jours d'affilée !`);
+            }
+        },
+
         // Start new game
         async startGame() {
             this.loading = true;
             this.error = '';
             this.setTimeLimit();
+            this._preGame = { level: this.player.level, achievements: [...(this.player.achievements || [])], dailyStreak: this.player.dailyStreak };
 
             try {
                 const data = await this.api('/quiz/start', 'POST', {
@@ -486,11 +534,13 @@ function quizApp() {
             this.stopTimer();
 
             // The server is the source of truth for XP: refresh the
-            // profile and display the difference
+            // profile and display the difference, then celebrate any progress.
             const previousXp = this.player.totalXp;
+            const before = this._preGame;
             this.xpGained = 0;
             this.fetchPlayer(this.player.id).then(() => {
                 this.xpGained = Math.max(0, this.player.totalXp - previousXp);
+                this.celebrateProgress(before);
             });
 
             this.screen = 'results';
