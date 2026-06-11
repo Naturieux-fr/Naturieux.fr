@@ -75,6 +75,7 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/invites", h.requireAuth(h.handleCreateInvite))
 	mux.HandleFunc("GET /api/v1/admin/stats", h.requireAuth(h.handleStats))
 	mux.HandleFunc("GET /api/v1/admin/players", h.requireAuth(h.handleListPlayers))
+	mux.HandleFunc("GET /api/v1/admin/coverage", h.requireAuth(h.handleCoverage))
 	mux.HandleFunc("DELETE /api/v1/admin/players/{id}", h.requireAuth(h.handleDeletePlayer))
 	mux.HandleFunc("POST /api/v1/admin/players/{id}/role", h.requireAuth(h.handleSetPlayerRole))
 }
@@ -106,6 +107,20 @@ func (h *AdminHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeSuccess(w, out)
+}
+
+// handleCoverage returns the photo coverage per taxonomic group.
+func (h *AdminHandler) handleCoverage(w http.ResponseWriter, r *http.Request) {
+	if h.photos == nil {
+		writeError(w, http.StatusServiceUnavailable, "coverage requires the TAXREF species source")
+		return
+	}
+	rows, err := h.photos.PhotoCoverage(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"coverage": rows})
 }
 
 // handleListPlayers returns the player roster.

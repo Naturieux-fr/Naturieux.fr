@@ -15,6 +15,7 @@ function adminApp() {
         tab: 'dashboard',
         stats: {},
         players: [],
+        coverage: [],
 
         init() {
             this.token = localStorage.getItem('naturieux_admin_token') || '';
@@ -23,7 +24,10 @@ function adminApp() {
 
         // Dashboard
         async loadStats() {
-            try { this.stats = await this.api('/admin/stats', 'GET'); } catch (e) { this.error = e.message; }
+            try {
+                this.stats = await this.api('/admin/stats', 'GET');
+                try { this.coverage = (await this.api('/admin/coverage', 'GET')).coverage || []; } catch (e) { this.coverage = []; }
+            } catch (e) { this.error = e.message; }
         },
 
         // Players

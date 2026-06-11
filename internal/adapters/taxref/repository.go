@@ -443,3 +443,36 @@ func (r *Repository) CountSpeciesWithPhotos(ctx context.Context) (int, error) {
 	}
 	return n, nil
 }
+
+// CoverageRow is the photo coverage for one taxonomic group.
+type CoverageRow struct {
+	Group   string `json:"group"`
+	Species int    `json:"species"`
+	Photos  int    `json:"photos"`
+}
+
+// PhotoCoverage reports, per group, how many distinct species have photos and
+// how many photos exist, ordered by best coverage.
+func (r *Repository) PhotoCoverage(ctx context.Context) ([]CoverageRow, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT COALESCE(NULLIF(s.taxa_group, ''), s.kingdom) AS grp,
+		       COUNT(DISTINCT p.cd_nom) AS species, COUNT(*) AS photos
+		FROM taxref_photos p
+		JOIN taxref_species s ON s.cd_nom = p.cd_nom
+		GROUP BY grp
+		ORDER BY species DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("photo coverage: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]CoverageRow, 0, 12)
+	for rows.Next() {
+		var c CoverageRow
+		if err := rows.Scan(&c.Group, &c.Species, &c.Photos); err != nil {
+			return nil, fmt.Errorf("scanning coverage: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
