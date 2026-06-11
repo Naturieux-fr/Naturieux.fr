@@ -63,10 +63,10 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Formats de jeu** : **Chrono** (90 s) et **Survie** (1 erreur). *(fait)*
 - [x] **Mode révision** : revoir les espèces ratées (`player_misses`, décroissance au succès). *(fait)*
 - [x] **PWA** : manifest + service worker, appli installable + shell hors-ligne. *(fait)*
-- [ ] **Récupération de compte** : mot de passe oublié (nécessite e-mail).
+- [x] **Récupération de compte** : mot de passe oublié **sans e-mail** — lien de réinitialisation à usage unique généré par l'admin (🔑 onglet Joueurs), valable 24 h. *(fait)*
 - [x] **Mode famille** : épreuve « Famille » — trouver la famille de l'espèce photographiée (choix = familles). *(fait)*
 - [ ] **Filtres lieu & saison** — **bloqué par les données** : TAXREF ne contient ni phénologie (saison) ni occurrence fine par région/département (seulement des codes de présence grossiers `fr`). Nécessite un jeu de données externe (occurrences INPN, phénologie) avant d'être faisable.
-- [ ] **Récupération de compte** : mot de passe oublié (nécessite e-mail).
+- [x] **Récupération de compte** : mot de passe oublié **sans e-mail** — lien de réinitialisation à usage unique généré par l'admin (🔑 onglet Joueurs), valable 24 h. *(fait)*
 - [ ] **Migration API v2 iNaturalist** (pertinent seulement si on garde iNaturalist en appoint).
 - [ ] **Tests E2E frontend** (Playwright) intégrés à la CI.
 - [ ] **i18n** : déjà des noms français via TAXREF ; généraliser le fallback.
