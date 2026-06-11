@@ -7,6 +7,7 @@ package room
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -33,12 +34,25 @@ const (
 	Done    Status = "finished"
 )
 
+// Mode is a multiplayer game format.
+type Mode string
+
+const (
+	// Classic: everyone answers every question; highest score wins.
+	Classic Mode = "classic"
+	// Elimination: a single wrong answer knocks a player out (sudden death);
+	// the last survivors rank highest.
+	Elimination Mode = "elimination"
+)
+
 // Settings configures the shared quiz of a room.
 type Settings struct {
 	Difficulty  quiz.Difficulty
 	QuizType    quiz.QuizType
 	TaxonFilter string
 	Count       int
+	Mode        Mode
+	AnswerMode  string // "choices" or "free" (rendered client-side)
 }
 
 // QuestionMaker produces quiz questions; satisfied by the quiz factory.
@@ -48,19 +62,25 @@ type QuestionMaker interface {
 
 // player holds one participant's progress.
 type player struct {
-	id       string
-	name     string
-	score    int
-	streak   int // current consecutive correct answers
-	best     int // best streak this game
-	correct  int // number of correct answers
-	index    int // index of the question to answer next
-	done     bool
-	lastSeen time.Time
+	id         string
+	name       string
+	token      string // secret, required to act as this player
+	score      int
+	streak     int // current consecutive correct answers
+	best       int // best streak this game
+	correct    int // number of correct answers
+	index      int // index of the question to answer next
+	done       bool
+	eliminated bool      // knocked out in elimination mode
+	since      time.Time // when the current question was delivered (server-side timing)
+	lastSeen   time.Time
 }
 
 // streakBonusThreshold is the streak length from which a combo bonus applies.
 const streakBonusThreshold = 3
+
+// maxRoomQuestions caps a room's question count to bound work per room.
+const maxRoomQuestions = 30
 
 // Room is a single multiplayer game.
 type Room struct {
@@ -91,16 +111,31 @@ func NewManager(maker QuestionMaker) *Manager {
 // Code returns the room's join code.
 func (r *Room) Code() string { return r.code }
 
-// Create opens a new room hosted by the given player and returns it.
-func (m *Manager) Create(hostID, hostName string, s Settings) (*Room, error) {
+// Create opens a new room hosted by the given player and returns the room with
+// the host's secret token (needed to start and to answer).
+func (m *Manager) Create(hostID, hostName string, s Settings) (*Room, string, error) {
 	if hostID == "" || hostName == "" {
-		return nil, errors.New("host id and name are required")
+		return nil, "", errors.New("host id and name are required")
 	}
 	if s.Count <= 0 {
 		s.Count = 10
 	}
+	if s.Count > maxRoomQuestions {
+		s.Count = maxRoomQuestions
+	}
 	if s.QuizType == "" {
 		s.QuizType = quiz.ImageQuiz
+	}
+	if s.Mode == "" {
+		s.Mode = Classic
+	}
+	if s.AnswerMode == "" {
+		s.AnswerMode = "choices"
+	}
+
+	token, err := randomToken()
+	if err != nil {
+		return nil, "", err
 	}
 
 	m.mu.Lock()
@@ -108,19 +143,19 @@ func (m *Manager) Create(hostID, hostName string, s Settings) (*Room, error) {
 
 	code, err := m.uniqueCode()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	r := &Room{
 		code:     code,
 		hostID:   hostID,
 		settings: s,
 		status:   Lobby,
-		players:  []*player{{id: hostID, name: hostName, lastSeen: m.now()}},
+		players:  []*player{{id: hostID, name: hostName, token: token, lastSeen: m.now()}},
 		created:  m.now(),
 		activity: m.now(),
 	}
 	m.rooms[code] = r
-	return r, nil
+	return r, token, nil
 }
 
 // Get returns a room by code.
@@ -134,45 +169,62 @@ func (m *Manager) Get(code string) (*Room, error) {
 	return r, nil
 }
 
-// Join adds a player to a room still in the lobby.
-func (m *Manager) Join(code, playerID, playerName string) (*Room, error) {
+// Join adds a player to a room still in the lobby and returns their secret
+// token. Re-joining with the same id returns a fresh token.
+func (m *Manager) Join(code, playerID, playerName string) (*Room, string, error) {
+	if playerID == "" || playerName == "" {
+		return nil, "", errors.New("player id and name are required")
+	}
+	token, err := randomToken()
+	if err != nil {
+		return nil, "", err
+	}
 	r, err := m.Get(code)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.status != Lobby {
-		return nil, ErrBadState
+		return nil, "", ErrBadState
 	}
 	r.touch(m.now())
 	if p := r.find(playerID); p != nil {
 		p.name = playerName
-		return r, nil
+		p.token = token
+		return r, token, nil
 	}
-	r.players = append(r.players, &player{id: playerID, name: playerName, lastSeen: m.now()})
-	return r, nil
+	r.players = append(r.players, &player{id: playerID, name: playerName, token: token, lastSeen: m.now()})
+	return r, token, nil
 }
 
-// Start generates the shared questions and begins the game. Only the host may
-// start, and only from the lobby.
-func (m *Manager) Start(ctx context.Context, code, hostID string) error {
+// Start generates the shared questions and begins the game. Only the host
+// (authenticated by token) may start, and only from the lobby. Question
+// generation happens without holding the room lock.
+func (m *Manager) Start(ctx context.Context, code, token string) error {
 	r, err := m.Get(code)
 	if err != nil {
 		return err
 	}
+
+	// Validate the request and snapshot the settings under a brief lock.
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if hostID != r.hostID {
+	host := r.find(r.hostID)
+	if host == nil || host.token != token {
+		r.mu.Unlock()
 		return ErrForbidden
 	}
 	if r.status != Lobby {
+		r.mu.Unlock()
 		return ErrBadState
 	}
+	settings := r.settings
+	r.mu.Unlock()
 
-	questions := make([]*quiz.Question, 0, r.settings.Count)
-	for i := 0; i < r.settings.Count; i++ {
-		q, err := m.maker.CreateQuestion(ctx, r.settings.QuizType, r.settings.Difficulty, r.settings.TaxonFilter)
+	// Build the questions outside the lock (bounded by maxRoomQuestions).
+	questions := make([]*quiz.Question, 0, settings.Count)
+	for i := 0; i < settings.Count; i++ {
+		q, err := m.maker.CreateQuestion(ctx, settings.QuizType, settings.Difficulty, settings.TaxonFilter)
 		if err != nil {
 			continue
 		}
@@ -182,9 +234,18 @@ func (m *Manager) Start(ctx context.Context, code, hostID string) error {
 		return ErrNoQuestions
 	}
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.status != Lobby { // a concurrent Start already ran
+		return ErrBadState
+	}
 	r.questions = questions
 	r.status = Playing
-	r.touch(m.now())
+	now := m.now()
+	for _, p := range r.players {
+		p.since = now
+	}
+	r.touch(now)
 	return nil
 }
 
@@ -197,11 +258,14 @@ type AnswerResult struct {
 	TotalScore       int
 	Streak           int
 	Done             bool
+	Eliminated       bool
 	NextQuestion     *quiz.Question
 }
 
-// Answer records a player's answer to their current question.
-func (m *Manager) Answer(code, playerID string, speciesID int, taken time.Duration) (*AnswerResult, error) {
+// Answer records, for the player identified by token, an answer to their
+// current question. Timing is measured server-side; the species id may be 0
+// (a deliberate "no answer", e.g. timeout or exhausted free-text attempts).
+func (m *Manager) Answer(code, token string, speciesID int) (*AnswerResult, error) {
 	r, err := m.Get(code)
 	if err != nil {
 		return nil, err
@@ -211,20 +275,55 @@ func (m *Manager) Answer(code, playerID string, speciesID int, taken time.Durati
 	if r.status != Playing {
 		return nil, ErrBadState
 	}
-	p := r.find(playerID)
+	p := r.findByToken(token)
 	if p == nil {
 		return nil, ErrPlayerUnknown
 	}
 	if p.done || p.index >= len(r.questions) {
 		return nil, ErrBadState
 	}
-	r.touch(m.now())
-
 	q := r.questions[p.index]
 	correct := q.CheckAnswer(speciesID)
+	return r.record(p, q, correct, m.now()), nil
+}
+
+// GuessName checks a free-text guess against the player's current question
+// without advancing it. It returns whether the guess is correct and, only when
+// correct, the species id so the caller can record the answer.
+func (m *Manager) GuessName(code, token, guess string) (bool, int, error) {
+	r, err := m.Get(code)
+	if err != nil {
+		return false, 0, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.status != Playing {
+		return false, 0, ErrBadState
+	}
+	p := r.findByToken(token)
+	if p == nil {
+		return false, 0, ErrPlayerUnknown
+	}
+	if p.done || p.index >= len(r.questions) {
+		return false, 0, ErrBadState
+	}
+	q := r.questions[p.index]
+	if q.CorrectSpecies().MatchesName(guess) {
+		return true, q.CorrectSpecies().ID(), nil
+	}
+	return false, 0, nil
+}
+
+// record scores a player's answer, advances them, applies elimination, and
+// finishes the room when everyone is done. Caller holds r.mu.
+func (r *Room) record(p *player, q *quiz.Question, correct bool, now time.Time) *AnswerResult {
+	r.touch(now)
+	taken := now.Sub(p.since)
+	if taken < 0 {
+		taken = 0
+	}
 	score := q.CalculateScore(taken, correct)
 
-	// Combo: a running streak adds an escalating bonus, rewarding momentum.
 	if correct {
 		p.streak++
 		p.correct++
@@ -240,7 +339,13 @@ func (m *Manager) Answer(code, playerID string, speciesID int, taken time.Durati
 
 	p.score += score
 	p.index++
+	p.since = now
 	if p.index >= len(r.questions) {
+		p.done = true
+	}
+	// Sudden death: a wrong answer ends this player's game immediately.
+	if !correct && r.settings.Mode == Elimination {
+		p.eliminated = true
 		p.done = true
 	}
 
@@ -252,30 +357,30 @@ func (m *Manager) Answer(code, playerID string, speciesID int, taken time.Durati
 		TotalScore:       p.score,
 		Streak:           p.streak,
 		Done:             p.done,
+		Eliminated:       p.eliminated,
 	}
 	if !p.done {
 		res.NextQuestion = r.questions[p.index]
 	}
-
-	// The room finishes once everyone is done.
 	if r.allDone() {
 		r.status = Done
 	}
-	return res, nil
+	return res
 }
 
 // PlayerState is a participant's public standing in a room.
 type PlayerState struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Score    int    `json:"score"`
-	Streak   int    `json:"streak"`
-	Best     int    `json:"best_streak"`
-	Correct  int    `json:"correct"`
-	Answered int    `json:"answered"`
-	Done     bool   `json:"done"`
-	Rank     int    `json:"rank"`
-	IsHost   bool   `json:"is_host"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Score      int    `json:"score"`
+	Streak     int    `json:"streak"`
+	Best       int    `json:"best_streak"`
+	Correct    int    `json:"correct"`
+	Answered   int    `json:"answered"`
+	Done       bool   `json:"done"`
+	Eliminated bool   `json:"eliminated"`
+	Rank       int    `json:"rank"`
+	IsHost     bool   `json:"is_host"`
 }
 
 // State is a snapshot of a room for polling clients.
@@ -294,6 +399,8 @@ type StateSettings struct {
 	QuizType    string `json:"quiz_type"`
 	TaxonFilter string `json:"taxon_filter"`
 	Count       int    `json:"count"`
+	Mode        string `json:"mode"`
+	AnswerMode  string `json:"answer_mode"`
 }
 
 // Snapshot returns the current room state with players ranked by score.
@@ -310,13 +417,13 @@ func (m *Manager) Snapshot(code string) (State, error) {
 		players[i] = PlayerState{
 			ID: p.id, Name: p.name, Score: p.score, Streak: p.streak,
 			Best: p.best, Correct: p.correct, Answered: p.index, Done: p.done,
-			IsHost: p.id == r.hostID,
+			Eliminated: p.eliminated, IsHost: p.id == r.hostID,
 		}
 	}
-	// Rank by score (desc); ties keep their order.
+	// Rank survivors above the eliminated, then by score (desc).
 	for i := 0; i < len(players); i++ {
 		for j := i + 1; j < len(players); j++ {
-			if players[j].Score > players[i].Score {
+			if rankBefore(players[j], players[i]) {
 				players[i], players[j] = players[j], players[i]
 			}
 		}
@@ -336,8 +443,19 @@ func (m *Manager) Snapshot(code string) (State, error) {
 			QuizType:    string(r.settings.QuizType),
 			TaxonFilter: r.settings.TaxonFilter,
 			Count:       r.settings.Count,
+			Mode:        string(r.settings.Mode),
+			AnswerMode:  r.settings.AnswerMode,
 		},
 	}, nil
+}
+
+// rankBefore reports whether a should rank above b: survivors first, then by
+// score.
+func rankBefore(a, b PlayerState) bool {
+	if a.Eliminated != b.Eliminated {
+		return !a.Eliminated
+	}
+	return a.Score > b.Score
 }
 
 // CurrentQuestion returns the question a player is currently on (for image
@@ -411,6 +529,27 @@ func (r *Room) find(id string) *player {
 		}
 	}
 	return nil
+}
+
+func (r *Room) findByToken(token string) *player {
+	if token == "" {
+		return nil
+	}
+	for _, p := range r.players {
+		if p.token == token {
+			return p
+		}
+	}
+	return nil
+}
+
+// randomToken returns an unguessable per-player secret.
+func randomToken() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generating room token: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func (r *Room) allDone() bool {

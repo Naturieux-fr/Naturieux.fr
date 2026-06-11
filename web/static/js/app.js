@@ -14,7 +14,13 @@ function quizApp() {
         inRoom: false,
         roomDone: false,
         joinCode: '',
-        room: { code: '', status: '', players: [], total: 0, hostId: '' },
+        room: { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' },
+        roomToken: '',
+        roomMode: 'classic',
+        roomModes: [
+            { id: 'classic', name: 'Classique', desc: 'le meilleur score gagne' },
+            { id: 'elimination', name: 'Élimination', desc: 'une erreur et c\'est fini' }
+        ],
         roomPoll: null,
         comboFlash: 0,
 
@@ -387,6 +393,7 @@ function quizApp() {
         // Free-answer mode: check a typed guess. Correct → record it; wrong →
         // consume an attempt, and on the last one reveal the answer.
         async submitGuess() {
+            if (this.inRoom) { return this.roomGuess(); }
             if (this.showFeedback || !this.guess.trim()) return;
             try {
                 const data = await this.api(`/quiz/${this.sessionId}/guess`, 'POST', { guess: this.guess });
@@ -520,7 +527,8 @@ function quizApp() {
         openMulti() {
             this.error = '';
             this.joinCode = '';
-            this.room = { code: '', status: '', players: [], total: 0, hostId: '' };
+            this.roomToken = '';
+            this.room = { code: '', status: '', players: [], total: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
             this.screen = 'mp-lobby';
         },
 
@@ -530,9 +538,11 @@ function quizApp() {
                 const data = await this.api('/rooms', 'POST', {
                     host_id: this.player.id, host_name: this.player.name,
                     difficulty: this.settings.difficulty, quiz_type: this.settings.epreuve,
+                    answer_mode: this.settings.answerMode, mode: this.roomMode,
                     taxon_filter: this.settings.taxon, count: this.settings.questionCount
                 });
                 this.room.code = data.code;
+                this.roomToken = data.token;
                 this.startRoomPolling();
             } catch (e) { this.error = e.message; }
             finally { this.loading = false; }
@@ -547,6 +557,7 @@ function quizApp() {
                     player_id: this.player.id, player_name: this.player.name
                 });
                 this.room.code = code;
+                this.roomToken = data.token;
                 this.applyRoom(data.room);
                 this.startRoomPolling();
             } catch (e) {
@@ -556,7 +567,7 @@ function quizApp() {
 
         async startRoom() {
             try {
-                await this.api(`/rooms/${this.room.code}/start`, 'POST', { host_id: this.player.id });
+                await this.api(`/rooms/${this.room.code}/start`, 'POST', { player_id: this.player.id, token: this.roomToken });
             } catch (e) { this.error = e.message; }
         },
 
@@ -594,6 +605,16 @@ function quizApp() {
             this.room.players = r.players || [];
             this.room.total = r.total_questions || 0;
             this.room.hostId = r.host_id;
+            if (r.settings) {
+                this.room.mode = r.settings.mode || 'classic';
+                this.room.answerMode = r.settings.answer_mode || 'choices';
+            }
+        },
+
+        // The answer UI follows the room's mode in multiplayer, the local
+        // setting in solo.
+        get activeAnswerMode() {
+            return this.inRoom ? this.room.answerMode : this.settings.answerMode;
         },
 
         get isHost() { return this.room.hostId === this.player.id; },
@@ -611,14 +632,29 @@ function quizApp() {
             this.screen = 'quiz';
         },
 
+        // Free-answer in a room: check the guess, then record via roomAnswer.
+        async roomGuess() {
+            if (this.showFeedback || !this.guess.trim()) return;
+            try {
+                const data = await this.api(`/rooms/${this.room.code}/guess`, 'POST', { token: this.roomToken, guess: this.guess });
+                if (data.correct) { this.roomAnswer(data.species_id); return; }
+                this.attemptsLeft--;
+                if (this.attemptsLeft <= 0) {
+                    this.roomAnswer(0);
+                } else {
+                    this.guessHint = `Pas tout à fait — ${this.attemptsLeft} essai${this.attemptsLeft > 1 ? 's' : ''} restant${this.attemptsLeft > 1 ? 's' : ''}`;
+                    this.guess = '';
+                }
+            } catch (e) { this.error = e.message; }
+        },
+
         async roomAnswer(speciesId) {
             if (this.showFeedback) return;
             this.stopTimer();
             this.selectedAnswer = speciesId;
-            const timeTaken = Date.now() - this.startTime;
             try {
                 const data = await this.api(`/rooms/${this.room.code}/answer`, 'POST', {
-                    player_id: this.player.id, species_id: speciesId || 0, time_taken_ms: timeTaken
+                    player_id: this.player.id, token: this.roomToken, species_id: speciesId || 0
                 });
                 this.isCorrect = data.is_correct;
                 this.correctAnswer = data.correct_species_id;

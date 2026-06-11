@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/Naturieux-fr/Naturieux.fr/internal/application/room"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
@@ -30,6 +29,7 @@ func (h *RoomHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/rooms/{code}/start", h.handleStart)
 	mux.HandleFunc("GET /api/v1/rooms/{code}", h.handleState)
 	mux.HandleFunc("POST /api/v1/rooms/{code}/answer", h.handleAnswer)
+	mux.HandleFunc("POST /api/v1/rooms/{code}/guess", h.handleGuess)
 	mux.HandleFunc("GET /api/v1/rooms/{code}/image", h.handleImage)
 }
 
@@ -41,22 +41,26 @@ func (h *RoomHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		QuizType    string `json:"quiz_type"`
 		TaxonFilter string `json:"taxon_filter"`
 		Count       int    `json:"count"`
+		Mode        string `json:"mode"`
+		AnswerMode  string `json:"answer_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	rm, err := h.rooms.Create(req.HostID, req.HostName, room.Settings{
+	rm, token, err := h.rooms.Create(req.HostID, req.HostName, room.Settings{
 		Difficulty:  quiz.Difficulty(req.Difficulty),
 		QuizType:    quiz.QuizType(orDefault(req.QuizType, "image")),
 		TaxonFilter: req.TaxonFilter,
 		Count:       req.Count,
+		Mode:        room.Mode(orDefault(req.Mode, "classic")),
+		AnswerMode:  orDefault(req.AnswerMode, "choices"),
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeSuccess(w, map[string]string{"code": rm.Code()})
+	writeSuccess(w, map[string]string{"code": rm.Code(), "token": token})
 }
 
 func (h *RoomHandler) handleJoin(w http.ResponseWriter, r *http.Request) {
@@ -68,26 +72,28 @@ func (h *RoomHandler) handleJoin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if _, err := h.rooms.Join(r.PathValue("code"), req.PlayerID, req.PlayerName); err != nil {
+	_, token, err := h.rooms.Join(r.PathValue("code"), req.PlayerID, req.PlayerName)
+	if err != nil {
 		h.writeRoomError(w, err)
 		return
 	}
-	h.respondState(w, r.PathValue("code"), req.PlayerID)
+	h.respondStateWith(w, r.PathValue("code"), req.PlayerID, map[string]interface{}{"token": token})
 }
 
 func (h *RoomHandler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		HostID string `json:"host_id"`
+		PlayerID string `json:"player_id"`
+		Token    string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.rooms.Start(r.Context(), r.PathValue("code"), req.HostID); err != nil {
+	if err := h.rooms.Start(r.Context(), r.PathValue("code"), req.Token); err != nil {
 		h.writeRoomError(w, err)
 		return
 	}
-	h.respondState(w, r.PathValue("code"), req.HostID)
+	h.respondState(w, r.PathValue("code"), req.PlayerID)
 }
 
 func (h *RoomHandler) handleState(w http.ResponseWriter, r *http.Request) {
@@ -96,16 +102,16 @@ func (h *RoomHandler) handleState(w http.ResponseWriter, r *http.Request) {
 
 func (h *RoomHandler) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		PlayerID    string `json:"player_id"`
-		SpeciesID   int    `json:"species_id"`
-		TimeTakenMs int    `json:"time_taken_ms"`
+		PlayerID  string `json:"player_id"`
+		Token     string `json:"token"`
+		SpeciesID int    `json:"species_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	code := r.PathValue("code")
-	res, err := h.rooms.Answer(code, req.PlayerID, req.SpeciesID, time.Duration(req.TimeTakenMs)*time.Millisecond)
+	res, err := h.rooms.Answer(code, req.Token, req.SpeciesID)
 	if err != nil {
 		h.writeRoomError(w, err)
 		return
@@ -118,6 +124,7 @@ func (h *RoomHandler) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		"total_score":        res.TotalScore,
 		"streak":             res.Streak,
 		"done":               res.Done,
+		"eliminated":         res.Eliminated,
 	}
 	if res.NextQuestion != nil {
 		dto := questionToDTO(res.NextQuestion)
@@ -125,6 +132,27 @@ func (h *RoomHandler) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		out["next_question"] = dto
 	}
 	writeSuccess(w, out)
+}
+
+func (h *RoomHandler) handleGuess(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+		Guess string `json:"guess"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	correct, speciesID, err := h.rooms.GuessName(r.PathValue("code"), req.Token, req.Guess)
+	if err != nil {
+		h.writeRoomError(w, err)
+		return
+	}
+	if correct {
+		writeSuccess(w, map[string]interface{}{"correct": true, "species_id": speciesID})
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"correct": false})
 }
 
 func (h *RoomHandler) handleImage(w http.ResponseWriter, r *http.Request) {
@@ -145,12 +173,20 @@ func (h *RoomHandler) handleImage(w http.ResponseWriter, r *http.Request) {
 // respondState writes the room snapshot, plus the viewer's current question
 // when the game is running and they still have one to answer.
 func (h *RoomHandler) respondState(w http.ResponseWriter, code, viewerID string) {
+	h.respondStateWith(w, code, viewerID, nil)
+}
+
+// respondStateWith is respondState with extra top-level fields merged in.
+func (h *RoomHandler) respondStateWith(w http.ResponseWriter, code, viewerID string, extra map[string]interface{}) {
 	state, err := h.rooms.Snapshot(code)
 	if err != nil {
 		h.writeRoomError(w, err)
 		return
 	}
 	payload := map[string]interface{}{"room": state}
+	for k, v := range extra {
+		payload[k] = v
+	}
 
 	if state.Status == room.Playing && viewerID != "" {
 		if q, err := h.rooms.CurrentQuestion(code, viewerID); err == nil {
