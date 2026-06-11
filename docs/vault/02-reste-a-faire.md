@@ -48,7 +48,7 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Modes** : Classique et **Élimination** (mort subite).
 - [x] **Temps réel WebSocket** (`coder/websocket`) + repli polling + **reconnexion** (reprise lobby/partie après rechargement).
 - [x] **Sécurité** : jeton secret par joueur (anti-usurpation), timing serveur, nombre de questions plafonné.
-- [ ] **Évolutions** : mode spectateur, salons publics/liste, keep-alive WebSocket mobile.
+- [x] **Évolutions** : mode **spectateur**, **salons publics** (liste + rejoindre), **keep-alive** WebSocket. *(fait)*
 
 ## Apprentissage & annotation (nouveau)
 
@@ -68,8 +68,8 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Filtres lieu & saison** — via **import unique** d'un export d'occurrences (GBIF/INPN), agrégé en local (`cmd/importoccurrences` → `species_months`/`species_regions`). **Zéro API à l'exécution.** Sélecteurs Lieu/Saison sur l'accueil (cachés tant que rien n'est importé). Voir `06-import-lieu-saison.md`. *(fait)*
 - [x] **Récupération de compte** : mot de passe oublié **sans e-mail** — lien de réinitialisation à usage unique généré par l'admin (🔑 onglet Joueurs), valable 24 h. *(fait)*
 - [ ] **Migration API v2 iNaturalist** (pertinent seulement si on garde iNaturalist en appoint).
-- [ ] **Tests E2E frontend** (Playwright) intégrés à la CI.
-- [ ] **i18n** : déjà des noms français via TAXREF ; généraliser le fallback.
+- [x] **Tests E2E** (Playwright) intégrés à la CI (`e2e.yml`) + tests d'intégration HTTP de flux complet (Go). *(fait)*
+- [x] **i18n** : repli déjà en place (nom scientifique si pas de nom français, `DisplayName`). Multi-langue complet : **hors périmètre** (appli ciblée FR). *(traité)*
 
 ## P3 — Déploiement
 
@@ -83,5 +83,5 @@ l'**identité visuelle** (logo + favicon).
 - [x] Store de sessions hors du handler (service + repo SQLite).
 - [x] Repo joueurs en mémoire supprimé (SQLite).
 - [x] **`.gitattributes`** : fins de ligne harmonisées (LF). *(fait)*
-- [ ] Couverture handlers HTTP : tester davantage les chemins succès avec service mocké.
+- [x] Couverture handlers HTTP : chemins succès couverts (flux complet start→answer→résultats, /config, /players) avec service mocké. *(fait)*
 - [ ] `golangci-lint` local : ne tourne pas (binaire go1.24 < cible 1.25) ; la CI l'exécute en `latest`.
