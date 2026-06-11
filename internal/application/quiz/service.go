@@ -117,6 +117,38 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 	}, nil
 }
 
+// StartSessionWithQuestions starts a session from a preset question set (used
+// by daily/weekly challenges so every player answers the same questions).
+func (s *Service) StartSessionWithQuestions(ctx context.Context, userID string, questions []*quiz.Question) (*StartSessionResponse, error) {
+	if userID == "" {
+		return nil, errors.New("user ID is required")
+	}
+	if len(questions) == 0 {
+		return nil, errors.New("no questions provided")
+	}
+	if _, err := s.playerRepo.GetByID(ctx, userID); err != nil {
+		return nil, fmt.Errorf("player not found: %w", err)
+	}
+
+	req := StartSessionRequest{
+		UserID:     userID,
+		Difficulty: questions[0].Difficulty(),
+		QuizTypes:  []quiz.QuizType{questions[0].QuizType()},
+	}
+	session, err := s.buildAndStartSession(req, questions)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.saveSession(ctx, session); err != nil {
+		return nil, err
+	}
+	return &StartSessionResponse{
+		SessionID:      session.ID(),
+		FirstQuestion:  session.CurrentQuestion(),
+		TotalQuestions: len(questions),
+	}, nil
+}
+
 // generateQuestions creates questions for the session.
 func (s *Service) generateQuestions(ctx context.Context, req StartSessionRequest) ([]*quiz.Question, error) {
 	questions := make([]*quiz.Question, 0, req.QuestionCount)

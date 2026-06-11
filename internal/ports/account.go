@@ -60,7 +60,10 @@ type Invite struct {
 type InviteStore interface {
 	CreateInvite(ctx context.Context, token, createdBy, createdAt string) error
 	GetInvite(ctx context.Context, token string) (Invite, error)
-	MarkInviteUsed(ctx context.Context, token, usedBy, usedAt string) error
+	// ConsumeInvite atomically validates and consumes an invite: it marks the
+	// token used only if it is still pending (not used, not revoked) and was
+	// created at or after minCreatedAt. It reports whether a row was consumed.
+	ConsumeInvite(ctx context.Context, token, usedBy, usedAt, minCreatedAt string) (bool, error)
 	RevokeInvite(ctx context.Context, token string) error
 	ListInvites(ctx context.Context, limit int) ([]Invite, error)
 }

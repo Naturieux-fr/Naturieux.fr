@@ -73,9 +73,6 @@ func (s *Service) Register(ctx context.Context, username, password, invite strin
 	if len(password) < 6 {
 		return nil, "", ErrWeakPassword
 	}
-	if s.mode == Invite && !s.validInvite(ctx, invite) {
-		return nil, "", ErrInviteRequired
-	}
 
 	if _, err := s.players.GetByUsername(ctx, username); err == nil {
 		return nil, "", ErrUsernameTaken
@@ -87,8 +84,23 @@ func (s *Service) Register(ctx context.Context, username, password, invite strin
 	if err != nil {
 		return nil, "", err
 	}
+	id := uuid.New().String()
 
-	player, err := gamification.NewPlayer(uuid.New().String(), username)
+	// In invite mode, atomically validate AND consume the invitation before
+	// creating anything, so a link is strictly single-use and never fails open.
+	if s.mode == Invite {
+		now := s.now().UTC()
+		minCreated := now.Add(-inviteTTL).Format(time.RFC3339)
+		ok, err := s.invites.ConsumeInvite(ctx, invite, id, now.Format(time.RFC3339), minCreated)
+		if err != nil {
+			return nil, "", err
+		}
+		if !ok {
+			return nil, "", ErrInviteRequired
+		}
+	}
+
+	player, err := gamification.NewPlayer(id, username)
 	if err != nil {
 		return nil, "", err
 	}
@@ -97,10 +109,6 @@ func (s *Service) Register(ctx context.Context, username, password, invite strin
 	}
 	if err := s.accounts.SetCredentials(ctx, player.ID(), hash); err != nil {
 		return nil, "", err
-	}
-	// Consume the invitation so the link can't be reused.
-	if s.mode == Invite && invite != "" {
-		_ = s.invites.MarkInviteUsed(ctx, invite, player.ID(), s.now().UTC().Format(time.RFC3339))
 	}
 
 	return player, auth.IssueToken(player.ID(), s.secret, sessionTTL, s.now()), nil
@@ -149,20 +157,6 @@ func (s *Service) ListInvites(ctx context.Context) ([]ports.Invite, error) {
 // RevokeInvite disables an invitation (admin only).
 func (s *Service) RevokeInvite(ctx context.Context, token string) error {
 	return s.invites.RevokeInvite(ctx, token)
-}
-
-// validInvite reports whether an invitation is pending (exists, not used, not
-// revoked, not expired).
-func (s *Service) validInvite(ctx context.Context, token string) bool {
-	inv, err := s.invites.GetInvite(ctx, token)
-	if err != nil || inv.Revoked || inv.UsedBy != "" {
-		return false
-	}
-	created, err := time.Parse(time.RFC3339, inv.CreatedAt)
-	if err != nil {
-		return true // tolerate an unparseable timestamp rather than lock out
-	}
-	return s.now().Sub(created) < inviteTTL
 }
 
 // randomToken returns an unguessable invitation token.

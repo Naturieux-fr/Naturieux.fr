@@ -48,14 +48,20 @@ func (r *InviteRepository) GetInvite(ctx context.Context, token string) (ports.I
 	return inv, nil
 }
 
-// MarkInviteUsed records who consumed an invitation.
-func (r *InviteRepository) MarkInviteUsed(ctx context.Context, token, usedBy, usedAt string) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE invites SET used_by = ?, used_at = ? WHERE token = ?`, usedBy, usedAt, token)
+// ConsumeInvite atomically marks an invite used, but only when it is still
+// pending (unused, not revoked) and not older than minCreatedAt. It returns
+// true only if exactly one row was consumed, making invites strictly
+// single-use even under concurrent registrations.
+func (r *InviteRepository) ConsumeInvite(ctx context.Context, token, usedBy, usedAt, minCreatedAt string) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE invites SET used_by = ?, used_at = ?
+		WHERE token = ? AND used_by IS NULL AND revoked = 0 AND created_at >= ?`,
+		usedBy, usedAt, token, minCreatedAt)
 	if err != nil {
-		return fmt.Errorf("marking invite used: %w", err)
+		return false, fmt.Errorf("consuming invite: %w", err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // RevokeInvite disables an invitation.
