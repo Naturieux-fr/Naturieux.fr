@@ -26,7 +26,7 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Comptes utilisateurs** : passés de simples pseudos à de **vrais comptes** — mot de passe bcrypt, jeton de session, **inscription libre ou sur invitation** (`REGISTRATION_MODE`, liens admin). `internal/application/account`.
 - [x] **Leaderboard** (`GET /api/v1/leaderboard` + écran). (Évolution : par taxon / période.)
 - [x] **Types de quiz** : Image, **Éclair**, **Silhouette**, **Détail** + **réponse libre** (3 essais). Sélecteurs sur l'accueil et dans les salons.
-  - [ ] **Son** : reste à faire — `sounds=true` côté iNaturalist + lecteur audio, ou **Xeno-canto** pour les oiseaux (clé API requise depuis oct. 2025).
+  - [x] **Son** : fait — mode **Chant** avec lecteur audio, sur des **enregistrements possédés** (table `taxref_sounds`, upload/URL dans l'admin, pas d'API externe). Reste à téléverser des chants.
 - [ ] **Filtres avancés** : la **catégorie taxonomique** est faite ; restent le **lieu** (région/département) et la **saison**.
 - [x] **Affichage des achievements et grades** : écran « Cabinet des hauts faits » (galerie débloqués/verrouillés) + **grades de spécialité à paliers** (Mammalogiste, Ornithologue… I/II/III à 100/500/2000) + toasts temps réel.
 
@@ -59,7 +59,7 @@ l'**identité visuelle** (logo + favicon).
 
 ## P2 — Améliorations
 
-- [ ] **Quiz Son** (voir P1) — chants d'oiseaux Xeno-canto.
+- [x] **Quiz Son** — mode Chant sur enregistrements possédés (upload admin). *(fait)*
 - [ ] **Mode révision** : revoir les espèces ratées (répétition espacée).
 - [ ] **PWA** : manifest + service worker pour usage mobile/terrain.
 - [ ] **Récupération de compte** : mot de passe oublié (nécessite e-mail).
