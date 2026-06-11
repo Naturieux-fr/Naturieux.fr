@@ -3,6 +3,7 @@ package taxref
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -280,18 +281,19 @@ func (r *Repository) scanSpecies(row rowScanner) (*species.Species, error) {
 	return sp, nil
 }
 
-// attachPhotos loads the owned photos for a species.
+// attachPhotos loads the owned photos for a species, including any zoom region
+// defined for the Détail quiz mode.
 func (r *Repository) attachPhotos(ctx context.Context, sp *species.Species) error {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT url, attribution, license FROM taxref_photos WHERE cd_nom = ?`, sp.ID())
+		`SELECT url, attribution, license, zones FROM taxref_photos WHERE cd_nom = ?`, sp.ID())
 	if err != nil {
 		return fmt.Errorf("taxref photos for %d: %w", sp.ID(), err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
-		var url, attribution, license string
-		if err := rows.Scan(&url, &attribution, &license); err != nil {
+		var url, attribution, license, zones string
+		if err := rows.Scan(&url, &attribution, &license, &zones); err != nil {
 			return fmt.Errorf("scanning photo: %w", err)
 		}
 		sp.AddPhoto(species.Photo{
@@ -300,9 +302,27 @@ func (r *Repository) attachPhotos(ctx context.Context, sp *species.Species) erro
 			LargeURL:    url,
 			Attribution: attribution,
 			LicenseCode: license,
+			Zoom:        zoomFromZones(zones),
 		})
 	}
 	return rows.Err()
+}
+
+// zoomFromZones extracts the zoom region from a photo's zones JSON, or nil.
+func zoomFromZones(raw string) *species.PhotoRegion {
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var z struct {
+		Zoom *species.PhotoRegion `json:"zoom"`
+	}
+	if err := json.Unmarshal([]byte(raw), &z); err != nil {
+		return nil
+	}
+	if z.Zoom != nil && z.Zoom.W > 0 && z.Zoom.H > 0 {
+		return z.Zoom
+	}
+	return nil
 }
 
 // firstVernacular returns the first name from a comma-separated TAXREF
@@ -324,12 +344,32 @@ func placeholders(n int) string {
 
 // PhotoRecord is an owned photo as managed by the back-office.
 type PhotoRecord struct {
-	ID          int    `json:"id"`
-	CdNom       int    `json:"cd_nom"`
-	URL         string `json:"url"`
-	Attribution string `json:"attribution"`
-	License     string `json:"license"`
-	Difficulty  string `json:"difficulty"`
+	ID          int             `json:"id"`
+	CdNom       int             `json:"cd_nom"`
+	URL         string          `json:"url"`
+	Attribution string          `json:"attribution"`
+	License     string          `json:"license"`
+	Difficulty  string          `json:"difficulty"`
+	Zones       json.RawMessage `json:"zones"`
+}
+
+// SetPhotoZones stores the annotation zones (zoom + per-species regions) for a
+// photo. zones is a JSON object; an empty value clears them.
+func (r *Repository) SetPhotoZones(ctx context.Context, photoID int, zones string) error {
+	if strings.TrimSpace(zones) == "" {
+		zones = "{}"
+	}
+	if !json.Valid([]byte(zones)) {
+		return fmt.Errorf("taxref set zones: invalid JSON")
+	}
+	res, err := r.db.ExecContext(ctx, `UPDATE taxref_photos SET zones = ? WHERE id = ?`, zones, photoID)
+	if err != nil {
+		return fmt.Errorf("taxref set zones: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ports.ErrNotFound
+	}
+	return nil
 }
 
 // AddPhoto inserts a locally owned photo for a taxon and returns its id.
@@ -357,7 +397,7 @@ func (r *Repository) AddPhoto(ctx context.Context, cdNom int, url, attribution, 
 // ListPhotos returns the owned photos for a taxon.
 func (r *Repository) ListPhotos(ctx context.Context, cdNom int) ([]PhotoRecord, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, cd_nom, url, attribution, license, difficulty
+		SELECT id, cd_nom, url, attribution, license, difficulty, zones
 		FROM taxref_photos WHERE cd_nom = ? ORDER BY id`, cdNom)
 	if err != nil {
 		return nil, fmt.Errorf("taxref list photos: %w", err)
@@ -367,9 +407,11 @@ func (r *Repository) ListPhotos(ctx context.Context, cdNom int) ([]PhotoRecord, 
 	photos := make([]PhotoRecord, 0)
 	for rows.Next() {
 		var p PhotoRecord
-		if err := rows.Scan(&p.ID, &p.CdNom, &p.URL, &p.Attribution, &p.License, &p.Difficulty); err != nil {
+		var zones string
+		if err := rows.Scan(&p.ID, &p.CdNom, &p.URL, &p.Attribution, &p.License, &p.Difficulty, &zones); err != nil {
 			return nil, fmt.Errorf("scanning photo: %w", err)
 		}
+		p.Zones = json.RawMessage(zones)
 		photos = append(photos, p)
 	}
 	return photos, rows.Err()

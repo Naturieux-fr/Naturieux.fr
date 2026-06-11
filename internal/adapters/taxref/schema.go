@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS taxref_photos (
 	attribution TEXT NOT NULL DEFAULT '',
 	license     TEXT NOT NULL DEFAULT '',
 	difficulty  TEXT NOT NULL DEFAULT '',
+	zones       TEXT NOT NULL DEFAULT '{}',
 	FOREIGN KEY (cd_nom) REFERENCES taxref_species(cd_nom)
 );
 
@@ -65,6 +66,7 @@ func EnsureSchema(db *sql.DB) error {
 	// Add columns introduced after the initial schema, for older databases.
 	for _, c := range []struct{ table, column, def string }{
 		{"taxref_photos", "difficulty", "TEXT NOT NULL DEFAULT ''"},
+		{"taxref_photos", "zones", "TEXT NOT NULL DEFAULT '{}'"},
 		{"taxref_species", "taxa_group", "TEXT NOT NULL DEFAULT ''"},
 		{"taxref_species", "fr", "TEXT NOT NULL DEFAULT ''"},
 	} {

@@ -193,6 +193,57 @@ function adminApp() {
             }
         },
 
+        // ----- Zones d'image (zoom Détail + espèces multiples) -----
+        zoneEditor: { open: false, photoId: null, url: '', zoom: null, species: [], tool: 'zoom', toolSpecies: null, drawing: null },
+        zoneSearch: { query: '', results: [] },
+        _zStart: null,
+
+        openZones(p) {
+            let z = {};
+            try { z = typeof p.zones === 'string' ? JSON.parse(p.zones || '{}') : (p.zones || {}); } catch (e) { z = {}; }
+            this.zoneEditor = {
+                open: true, photoId: p.id, url: p.url,
+                zoom: z.zoom || null, species: z.species || [],
+                tool: 'zoom', toolSpecies: null, drawing: null
+            };
+            this.zoneSearch = { query: '', results: [] };
+        },
+        closeZones() { this.zoneEditor.open = false; this._zStart = null; },
+        selectZoomTool() { this.zoneEditor.tool = 'zoom'; this.zoneEditor.toolSpecies = null; },
+        async searchZoneSpecies() {
+            if (!this.zoneSearch.query.trim()) return;
+            try { this.zoneSearch.results = (await this.api(`/admin/taxa?q=${encodeURIComponent(this.zoneSearch.query)}`, 'GET')).taxa || []; }
+            catch (e) { this.error = e.message; }
+        },
+        pickZoneSpecies(t) { this.zoneEditor.tool = 'species'; this.zoneEditor.toolSpecies = { cd_nom: t.cd_nom, name: t.scientific_name }; },
+        clearZoom() { this.zoneEditor.zoom = null; },
+        removeSpeciesZone(i) { this.zoneEditor.species.splice(i, 1); },
+        _frac(e) {
+            const r = e.currentTarget.getBoundingClientRect();
+            return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+        },
+        zoneDown(e) { const p = this._frac(e); this._zStart = p; this.zoneEditor.drawing = { x: p.x, y: p.y, w: 0, h: 0 }; },
+        zoneMove(e) {
+            if (!this._zStart) return;
+            const p = this._frac(e), s = this._zStart;
+            this.zoneEditor.drawing = { x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) };
+        },
+        zoneUp() {
+            const d = this.zoneEditor.drawing; this._zStart = null; this.zoneEditor.drawing = null;
+            if (!d || d.w < 0.02 || d.h < 0.02) return;
+            const rect = { x: +d.x.toFixed(3), y: +d.y.toFixed(3), w: +d.w.toFixed(3), h: +d.h.toFixed(3) };
+            if (this.zoneEditor.tool === 'zoom') this.zoneEditor.zoom = rect;
+            else if (this.zoneEditor.toolSpecies) this.zoneEditor.species.push({ ...this.zoneEditor.toolSpecies, ...rect });
+        },
+        async saveZones() {
+            const z = this.zoneEditor;
+            try {
+                await this.api(`/admin/photos/${z.photoId}/zones`, 'POST', { zoom: z.zoom, species: z.species });
+                this.closeZones();
+                await this.loadPhotos();
+            } catch (e) { this.error = e.message; }
+        },
+
         // Capture the chosen file and show a local preview.
         onFile(event) {
             const file = event.target.files[0];

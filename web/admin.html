@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css?v=3.2">
-    <link rel="stylesheet" href="/static/css/admin.css?v=2.2">
+    <link rel="stylesheet" href="/static/css/admin.css?v=2.3">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -135,8 +135,9 @@
                             <span class="pl-stat" x-text="`niv. ${p.level}`"></span>
                             <span class="pl-stat" x-text="`${p.total_games} parties`"></span>
                             <span class="pl-stat" x-text="`${Math.round(p.accuracy)}%`"></span>
-                            <button class="btn-mini" @click="setRole(p.id, p.role==='admin'?'player':'admin')"
-                                    x-text="p.role==='admin'?'Rétrograder':'Promouvoir'"></button>
+                            <button class="btn-mini" x-show="p.role!=='player'" @click="setRole(p.id,'player')">Joueur</button>
+                            <button class="btn-mini" x-show="p.role!=='writer'" @click="setRole(p.id,'writer')">Rédacteur</button>
+                            <button class="btn-mini" x-show="p.role!=='admin'" @click="setRole(p.id,'admin')">Admin</button>
                             <button class="btn-trash" @click="deletePlayer(p.id, p.username)" title="Supprimer">✕</button>
                         </div>
                     </template>
@@ -207,6 +208,7 @@
                             <img class="photo-mini" :src="p.url" alt="" loading="lazy">
                             <span class="photo-link" x-text="p.url"></span>
                             <span class="photo-diff" x-text="p.difficulty || '—'"></span>
+                            <button class="btn-mini" @click="openZones(p)" title="Zones d'image">⛶ Zones</button>
                             <button class="btn-trash" @click="removePhoto(p.id)" title="Retirer">✕</button>
                         </div>
                     </template>
@@ -243,8 +245,63 @@
                 </div>
             </article>
         </div>
+
+        <!-- Éditeur de zones -->
+        <div class="zone-modal" x-show="zoneEditor.open" x-cloak @keydown.escape.window="closeZones()">
+            <div class="zone-sheet">
+                <h2 class="plate-title">Zones de l'image</h2>
+                <p class="plate-lead">Tracez la <strong>zone de zoom</strong> (mode Détail) et/ou des <strong>zones d'espèces</strong> sur la photo.</p>
+
+                <div class="zone-tools">
+                    <button class="toggle-btn" :class="{ active: zoneEditor.tool==='zoom' }" @click="selectZoomTool()">⛶ Zone de zoom</button>
+                    <span class="zone-tool-sp" x-show="zoneEditor.toolSpecies" x-text="zoneEditor.toolSpecies ? '✎ ' + zoneEditor.toolSpecies.name : ''"></span>
+                </div>
+
+                <div class="zone-stage"
+                     @mousedown.prevent="zoneDown($event)" @mousemove="zoneMove($event)"
+                     @mouseup="zoneUp($event)" @mouseleave="zoneUp($event)">
+                    <img :src="zoneEditor.url" alt="" draggable="false">
+                    <!-- zoom -->
+                    <div class="zbox zbox-zoom" x-show="zoneEditor.zoom"
+                         :style="zoneEditor.zoom ? `left:${zoneEditor.zoom.x*100}%;top:${zoneEditor.zoom.y*100}%;width:${zoneEditor.zoom.w*100}%;height:${zoneEditor.zoom.h*100}%` : ''">
+                        <span>zoom</span>
+                    </div>
+                    <!-- species -->
+                    <template x-for="(s,i) in zoneEditor.species" :key="i">
+                        <div class="zbox zbox-sp" :style="`left:${s.x*100}%;top:${s.y*100}%;width:${s.w*100}%;height:${s.h*100}%`">
+                            <span x-text="s.name" @click.stop="removeSpeciesZone(i)"></span>
+                        </div>
+                    </template>
+                    <!-- draft -->
+                    <div class="zbox zbox-draft" x-show="zoneEditor.drawing"
+                         :style="zoneEditor.drawing ? `left:${zoneEditor.drawing.x*100}%;top:${zoneEditor.drawing.y*100}%;width:${zoneEditor.drawing.w*100}%;height:${zoneEditor.drawing.h*100}%` : ''"></div>
+                </div>
+
+                <div class="zone-side">
+                    <button class="btn-mini" @click="clearZoom()" x-show="zoneEditor.zoom">Effacer le zoom</button>
+                    <div class="field-row">
+                        <input type="text" class="ink-field" x-model="zoneSearch.query" placeholder="Zone d'espèce : chercher" @keyup.enter="searchZoneSpecies()">
+                        <button @click="searchZoneSpecies()" class="btn btn-quiet">Chercher</button>
+                    </div>
+                    <ul class="find-list" x-show="zoneSearch.results.length">
+                        <template x-for="t in zoneSearch.results" :key="t.cd_nom">
+                            <li class="find-item" @click="pickZoneSpecies(t)">
+                                <span class="find-names"><em x-text="t.scientific_name"></em></span>
+                                <span class="find-cd">choisir l'outil</span>
+                            </li>
+                        </template>
+                    </ul>
+                    <p class="zone-hint" x-show="zoneEditor.toolSpecies">Tracez maintenant la zone de « <span x-text="zoneEditor.toolSpecies?.name"></span> ».</p>
+                </div>
+
+                <div class="plate-actions">
+                    <button @click="saveZones()" class="btn btn-solid">Enregistrer les zones</button>
+                    <button @click="closeZones()" class="btn btn-quiet">Fermer</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.5"></script>
+    <script src="/static/js/admin.js?v=2.6"></script>
 </body>
 </html>

@@ -40,6 +40,18 @@ type Photo struct {
 	SquareURL   string
 	Attribution string
 	LicenseCode string
+	// Zoom, when set, is the area the Détail quiz mode crops to instead of a
+	// random crop.
+	Zoom *PhotoRegion
+}
+
+// PhotoRegion is a rectangular area of a photo expressed as fractions (0–1) of
+// the image's width and height.
+type PhotoRegion struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
 }
 
 // Species represents a biological species entity.

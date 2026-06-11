@@ -16,6 +16,7 @@ import (
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/species"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
@@ -145,15 +146,16 @@ type StartSessionResponse struct {
 
 // QuestionDTO represents a question for API responses.
 type QuestionDTO struct {
-	ID               string      `json:"id"`
-	QuizType         string      `json:"quiz_type"`
-	Difficulty       string      `json:"difficulty"`
-	MediaURL         string      `json:"media_url"`
-	MediaAttribution string      `json:"media_attribution,omitempty"`
-	MediaLicense     string      `json:"media_license,omitempty"`
-	TimeLimit        int         `json:"time_limit_seconds"`
-	FlashDuration    int         `json:"flash_duration_ms,omitempty"`
-	Choices          []ChoiceDTO `json:"choices"`
+	ID               string               `json:"id"`
+	QuizType         string               `json:"quiz_type"`
+	Difficulty       string               `json:"difficulty"`
+	MediaURL         string               `json:"media_url"`
+	MediaAttribution string               `json:"media_attribution,omitempty"`
+	MediaLicense     string               `json:"media_license,omitempty"`
+	TimeLimit        int                  `json:"time_limit_seconds"`
+	FlashDuration    int                  `json:"flash_duration_ms,omitempty"`
+	Zoom             *species.PhotoRegion `json:"zoom,omitempty"`
+	Choices          []ChoiceDTO          `json:"choices"`
 }
 
 // ChoiceDTO represents a choice for API responses.
@@ -363,6 +365,7 @@ func questionToDTO(q *quiz.Question) QuestionDTO {
 		MediaAttribution: q.MediaAttribution(),
 		MediaLicense:     q.MediaLicense(),
 		TimeLimit:        int(q.TimeLimit().Seconds()),
+		Zoom:             q.MediaZoom(),
 		Choices:          choices,
 	}
 

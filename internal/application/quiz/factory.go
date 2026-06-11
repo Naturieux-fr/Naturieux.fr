@@ -147,6 +147,7 @@ func (f *questionFactory) buildQuestion(
 	}
 	if mediaPhoto != nil {
 		question.SetMediaCredit(mediaPhoto.Attribution, mediaPhoto.LicenseCode)
+		question.SetMediaZoom(mediaPhoto.Zoom)
 	}
 	return question, nil
 }

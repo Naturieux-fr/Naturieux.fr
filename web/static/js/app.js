@@ -233,6 +233,14 @@ function quizApp() {
             return `transform: scale(2.7) translate(${tx}%, ${ty}%);`;
         },
 
+        // Crop the Détail mode to an admin-defined zoom region (fractions 0-1).
+        zoomStyle(z) {
+            const s = Math.min(6, Math.max(1.3, 1 / Math.max(z.w || 0.3, z.h || 0.3)));
+            const cx = (z.x || 0) + (z.w || 0) / 2;
+            const cy = (z.y || 0) + (z.h || 0) / 2;
+            return `transform: scale(${s.toFixed(2)}) translate(${((0.5 - cx) * 100).toFixed(1)}%, ${((0.5 - cy) * 100).toFixed(1)}%);`;
+        },
+
         // Called when quiz image fails to load
         onImageError() {
             console.error('Image failed to load');
@@ -506,7 +514,9 @@ function quizApp() {
             this.flashDurationMs = q.flash_duration_ms || 2500;
             this.flashHidden = false;
             if (this.flashTimeout) { clearTimeout(this.flashTimeout); this.flashTimeout = null; }
-            this.partialStyle = this.quizType === 'partial' ? this.randomPartialStyle() : '';
+            this.partialStyle = this.quizType === 'partial'
+                ? (q.zoom ? this.zoomStyle(q.zoom) : this.randomPartialStyle())
+                : '';
 
             // Free-answer mode
             this.guess = '';

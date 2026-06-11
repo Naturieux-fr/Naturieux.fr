@@ -87,6 +87,7 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/photos", h.requireAdmin(h.handleAddPhoto))
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/upload", h.requireAdmin(h.handleUploadPhoto))
 	mux.HandleFunc("DELETE /api/v1/admin/photos/{id}", h.requireAdmin(h.handleDeletePhoto))
+	mux.HandleFunc("POST /api/v1/admin/photos/{id}/zones", h.requireAdmin(h.handleSetPhotoZones))
 	mux.HandleFunc("POST /api/v1/admin/invites", h.requireAuth(h.handleCreateInvite))
 	mux.HandleFunc("GET /api/v1/admin/invites", h.requireAuth(h.handleListInvites))
 	mux.HandleFunc("POST /api/v1/admin/invites/{token}/revoke", h.requireAuth(h.handleRevokeInvite))
@@ -558,6 +559,29 @@ func (h *AdminHandler) handleDeletePhoto(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	writeSuccess(w, map[string]string{"message": "deleted"})
+}
+
+// handleSetPhotoZones stores the annotation zones for a photo: a zoom region
+// (used by the Détail quiz mode) and per-species regions on multi-species
+// photos. The body is the zones JSON object.
+func (h *AdminHandler) handleSetPhotoZones(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(w, r, "id")
+	if !ok {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.photos.SetPhotoZones(r.Context(), id, string(body)); errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "photo not found")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"message": "zones saved"})
 }
 
 // validPhotoDifficulty reports whether d is one of the quiz difficulty levels.

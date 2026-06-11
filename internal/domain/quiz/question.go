@@ -23,6 +23,7 @@ type Question struct {
 	mediaURL         string
 	mediaAttribution string
 	mediaLicense     string
+	mediaZoom        *species.PhotoRegion
 	timeLimit        time.Duration
 	flashDuration    time.Duration
 	createdAt        time.Time
@@ -129,6 +130,16 @@ func (q *Question) MediaLicense() string {
 	return q.mediaLicense
 }
 
+// SetMediaZoom records the area the Détail mode should crop to.
+func (q *Question) SetMediaZoom(z *species.PhotoRegion) {
+	q.mediaZoom = z
+}
+
+// MediaZoom returns the Détail-mode crop region, or nil.
+func (q *Question) MediaZoom() *species.PhotoRegion {
+	return q.mediaZoom
+}
+
 // TimeLimit returns the time limit for answering.
 func (q *Question) TimeLimit() time.Duration {
 	return q.timeLimit
@@ -153,13 +164,14 @@ type ChoiceSnapshot struct {
 // QuestionSnapshot is a serializable representation of a Question, used for
 // persistence and reconstruction.
 type QuestionSnapshot struct {
-	ID               string           `json:"id"`
-	QuizType         QuizType         `json:"quiz_type"`
-	Difficulty       Difficulty       `json:"difficulty"`
-	Choices          []ChoiceSnapshot `json:"choices"`
-	MediaURL         string           `json:"media_url"`
-	MediaAttribution string           `json:"media_attribution,omitempty"`
-	MediaLicense     string           `json:"media_license,omitempty"`
+	ID               string               `json:"id"`
+	QuizType         QuizType             `json:"quiz_type"`
+	Difficulty       Difficulty           `json:"difficulty"`
+	Choices          []ChoiceSnapshot     `json:"choices"`
+	MediaURL         string               `json:"media_url"`
+	MediaAttribution string               `json:"media_attribution,omitempty"`
+	MediaLicense     string               `json:"media_license,omitempty"`
+	MediaZoom        *species.PhotoRegion `json:"media_zoom,omitempty"`
 }
 
 // Snapshot returns a serializable representation of the question.
@@ -179,6 +191,7 @@ func (q *Question) Snapshot() QuestionSnapshot {
 		MediaURL:         q.mediaURL,
 		MediaAttribution: q.mediaAttribution,
 		MediaLicense:     q.mediaLicense,
+		MediaZoom:        q.mediaZoom,
 	}
 }
 
@@ -202,6 +215,7 @@ func RestoreQuestion(snap QuestionSnapshot) (*Question, error) {
 		return nil, err
 	}
 	question.SetMediaCredit(snap.MediaAttribution, snap.MediaLicense)
+	question.SetMediaZoom(snap.MediaZoom)
 	return question, nil
 }
 
