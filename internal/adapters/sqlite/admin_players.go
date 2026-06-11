@@ -16,6 +16,15 @@ func (r *PlayerRepository) CountPlayers(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// CountAdmins returns the number of admin accounts.
+func (r *PlayerRepository) CountAdmins(ctx context.Context) (int, error) {
+	var n int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM players WHERE role = 'admin'`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting admins: %w", err)
+	}
+	return n, nil
+}
+
 // TotalGames returns the total number of games played across all players.
 func (r *PlayerRepository) TotalGames(ctx context.Context) (int, error) {
 	var n int

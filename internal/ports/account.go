@@ -38,8 +38,10 @@ type PlayerSummary struct {
 // PlayerAdminStore exposes player administration queries.
 type PlayerAdminStore interface {
 	CountPlayers(ctx context.Context) (int, error)
+	CountAdmins(ctx context.Context) (int, error)
 	TotalGames(ctx context.Context) (int, error)
 	ListPlayers(ctx context.Context, limit int) ([]PlayerSummary, error)
+	Role(ctx context.Context, id string) (string, error)
 	DeletePlayer(ctx context.Context, id string) error
 	SetRole(ctx context.Context, id, role string) error
 }

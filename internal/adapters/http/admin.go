@@ -128,6 +128,10 @@ func (h *AdminHandler) handleDeletePlayer(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusServiceUnavailable, "player admin unavailable")
 		return
 	}
+	if h.wouldRemoveLastAdmin(r.Context(), r.PathValue("id")) {
+		writeError(w, http.StatusConflict, "impossible de supprimer le dernier administrateur")
+		return
+	}
 	err := h.players.DeletePlayer(r.Context(), r.PathValue("id"))
 	if errors.Is(err, ports.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "player not found")
@@ -153,6 +157,10 @@ func (h *AdminHandler) handleSetPlayerRole(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if req.Role == "player" && h.wouldRemoveLastAdmin(r.Context(), r.PathValue("id")) {
+		writeError(w, http.StatusConflict, "impossible de rétrograder le dernier administrateur")
+		return
+	}
 	err := h.players.SetRole(r.Context(), r.PathValue("id"), req.Role)
 	if errors.Is(err, ports.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "player not found")
@@ -163,6 +171,17 @@ func (h *AdminHandler) handleSetPlayerRole(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeSuccess(w, map[string]string{"message": "updated"})
+}
+
+// wouldRemoveLastAdmin reports whether removing or demoting the given player
+// would leave the site with no administrator.
+func (h *AdminHandler) wouldRemoveLastAdmin(ctx context.Context, id string) bool {
+	role, err := h.players.Role(ctx, id)
+	if err != nil || role != "admin" {
+		return false
+	}
+	n, err := h.players.CountAdmins(ctx)
+	return err == nil && n <= 1
 }
 
 // handleCreateInvite mints a player invitation token (the front-end turns it
