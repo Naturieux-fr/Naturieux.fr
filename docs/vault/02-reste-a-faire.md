@@ -27,7 +27,7 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Leaderboard** (`GET /api/v1/leaderboard` + écran). (Évolution : par taxon / période.)
 - [x] **Types de quiz** : Image, **Éclair**, **Silhouette**, **Détail** + **réponse libre** (3 essais). Sélecteurs sur l'accueil et dans les salons.
   - [x] **Son** : fait — mode **Chant** avec lecteur audio, sur des **enregistrements possédés** (table `taxref_sounds`, upload/URL dans l'admin, pas d'API externe). Reste à téléverser des chants.
-- [~] **Filtres avancés** : **catégorie** faite, **mode famille** fait ; **lieu/saison** bloqués faute de données (phénologie + occurrence fine absentes de TAXREF — voir P2).
+- [x] **Filtres avancés** : **catégorie**, **mode famille**, et **lieu/saison** (via import d'occurrences, sans API) — tous faits.
 - [x] **Affichage des achievements et grades** : écran « Cabinet des hauts faits » (galerie débloqués/verrouillés) + **grades de spécialité à paliers** (Mammalogiste, Ornithologue… I/II/III à 100/500/2000) + toasts temps réel.
 
 ## Source de données TAXREF (indépendance iNaturalist)
@@ -65,7 +65,7 @@ l'**identité visuelle** (logo + favicon).
 - [x] **PWA** : manifest + service worker, appli installable + shell hors-ligne. *(fait)*
 - [x] **Récupération de compte** : mot de passe oublié **sans e-mail** — lien de réinitialisation à usage unique généré par l'admin (🔑 onglet Joueurs), valable 24 h. *(fait)*
 - [x] **Mode famille** : épreuve « Famille » — trouver la famille de l'espèce photographiée (choix = familles). *(fait)*
-- [ ] **Filtres lieu & saison** — **bloqué par les données** : TAXREF ne contient ni phénologie (saison) ni occurrence fine par région/département (seulement des codes de présence grossiers `fr`). Nécessite un jeu de données externe (occurrences INPN, phénologie) avant d'être faisable.
+- [x] **Filtres lieu & saison** — via **import unique** d'un export d'occurrences (GBIF/INPN), agrégé en local (`cmd/importoccurrences` → `species_months`/`species_regions`). **Zéro API à l'exécution.** Sélecteurs Lieu/Saison sur l'accueil (cachés tant que rien n'est importé). Voir `06-import-lieu-saison.md`. *(fait)*
 - [x] **Récupération de compte** : mot de passe oublié **sans e-mail** — lien de réinitialisation à usage unique généré par l'admin (🔑 onglet Joueurs), valable 24 h. *(fait)*
 - [ ] **Migration API v2 iNaturalist** (pertinent seulement si on garde iNaturalist en appoint).
 - [ ] **Tests E2E frontend** (Playwright) intégrés à la CI.
