@@ -16,6 +16,7 @@ function adminApp() {
         stats: {},
         players: [],
         coverage: [],
+        invites: [],
 
         init() {
             this.token = localStorage.getItem('naturieux_admin_token') || '';
@@ -51,11 +52,27 @@ function adminApp() {
             try {
                 const data = await this.api('/admin/invites', 'POST', {});
                 this.inviteLink = `${location.origin}/?invite=${encodeURIComponent(data.invite)}`;
+                await this.loadInvites();
             } catch (e) { this.error = e.message; }
         },
         async copyInvite() {
             try { await navigator.clipboard.writeText(this.inviteLink); } catch (e) {}
         },
+        async loadInvites() {
+            try { this.invites = (await this.api('/admin/invites', 'GET')).invites || []; }
+            catch (e) { this.error = e.message; }
+        },
+        async revokeInvite(token) {
+            try { await this.api(`/admin/invites/${token}/revoke`, 'POST', {}); await this.loadInvites(); }
+            catch (e) { this.error = e.message; }
+        },
+        inviteStatus(i) {
+            if (i.revoked) return 'révoquée';
+            if (i.used_by) return 'utilisée';
+            return 'en attente';
+        },
+        inviteLinkFor(token) { return `${location.origin}/?invite=${encodeURIComponent(token)}`; },
+        async copyText(t) { try { await navigator.clipboard.writeText(t); } catch (e) {} },
 
         // Authenticated API call. Returns the `data` payload or throws.
         async api(endpoint, method = 'GET', body = null) {

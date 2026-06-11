@@ -45,3 +45,22 @@ type PlayerAdminStore interface {
 	DeletePlayer(ctx context.Context, id string) error
 	SetRole(ctx context.Context, id, role string) error
 }
+
+// Invite is a stored registration invitation.
+type Invite struct {
+	Token     string `json:"token"`
+	CreatedBy string `json:"created_by"`
+	CreatedAt string `json:"created_at"`
+	UsedBy    string `json:"used_by,omitempty"`
+	UsedAt    string `json:"used_at,omitempty"`
+	Revoked   bool   `json:"revoked"`
+}
+
+// InviteStore persists registration invitations for tracking and revocation.
+type InviteStore interface {
+	CreateInvite(ctx context.Context, token, createdBy, createdAt string) error
+	GetInvite(ctx context.Context, token string) (Invite, error)
+	MarkInviteUsed(ctx context.Context, token, usedBy, usedAt string) error
+	RevokeInvite(ctx context.Context, token string) error
+	ListInvites(ctx context.Context, limit int) ([]Invite, error)
+}

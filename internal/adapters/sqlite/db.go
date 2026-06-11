@@ -42,6 +42,15 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
 	data            TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS invites (
+	token      TEXT PRIMARY KEY,
+	created_by TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	used_by    TEXT,
+	used_at    TEXT,
+	revoked    INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON quiz_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_players_xp ON players(total_xp DESC);
 `

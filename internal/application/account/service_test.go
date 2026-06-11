@@ -16,7 +16,8 @@ func newService(t *testing.T, mode account.Mode) *account.Service {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	repo := sqlite.NewPlayerRepository(db)
-	return account.NewService(repo, repo, "test-secret", mode)
+	invites := sqlite.NewInviteRepository(db)
+	return account.NewService(repo, repo, invites, "test-secret", mode)
 }
 
 func TestAccount_RegisterAndLogin(t *testing.T) {
@@ -57,8 +58,15 @@ func TestAccount_InviteOnly(t *testing.T) {
 		t.Errorf("Register with bad invite = %v, want ErrInviteRequired", err)
 	}
 
-	invite := s.IssueInvite()
+	invite, err := s.IssueInvite(ctx, "admin")
+	if err != nil {
+		t.Fatalf("IssueInvite() error = %v", err)
+	}
 	if _, token, err := s.Register(ctx, "Carol", "secret123", invite); err != nil || token == "" {
 		t.Errorf("Register with valid invite = (%q, %v), want success", token, err)
+	}
+	// The invitation is single-use.
+	if _, _, err := s.Register(ctx, "Dave", "secret123", invite); err != account.ErrInviteRequired {
+		t.Errorf("reused invite = %v, want ErrInviteRequired", err)
 	}
 }

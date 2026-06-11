@@ -4,7 +4,10 @@ package account
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,25 +39,25 @@ const (
 
 const (
 	sessionTTL = 30 * 24 * time.Hour // players stay logged in for a month
-	inviteTTL  = 14 * 24 * time.Hour
-	inviteSub  = "invite" // token subject for invitations
+	inviteTTL  = 14 * 24 * time.Hour // an invitation link expires after two weeks
 )
 
 // Service registers and authenticates players.
 type Service struct {
 	accounts ports.AccountStore
 	players  ports.PlayerRepository
+	invites  ports.InviteStore
 	secret   string
 	mode     Mode
 	now      func() time.Time
 }
 
 // NewService creates the account service. mode selects open or invite signup.
-func NewService(accounts ports.AccountStore, players ports.PlayerRepository, secret string, mode Mode) *Service {
+func NewService(accounts ports.AccountStore, players ports.PlayerRepository, invites ports.InviteStore, secret string, mode Mode) *Service {
 	if mode != Invite {
 		mode = Open
 	}
-	return &Service{accounts: accounts, players: players, secret: secret, mode: mode, now: time.Now}
+	return &Service{accounts: accounts, players: players, invites: invites, secret: secret, mode: mode, now: time.Now}
 }
 
 // Mode reports the active registration policy.
@@ -70,7 +73,7 @@ func (s *Service) Register(ctx context.Context, username, password, invite strin
 	if len(password) < 6 {
 		return nil, "", ErrWeakPassword
 	}
-	if s.mode == Invite && !s.validInvite(invite) {
+	if s.mode == Invite && !s.validInvite(ctx, invite) {
 		return nil, "", ErrInviteRequired
 	}
 
@@ -95,6 +98,10 @@ func (s *Service) Register(ctx context.Context, username, password, invite strin
 	if err := s.accounts.SetCredentials(ctx, player.ID(), hash); err != nil {
 		return nil, "", err
 	}
+	// Consume the invitation so the link can't be reused.
+	if s.mode == Invite && invite != "" {
+		_ = s.invites.MarkInviteUsed(ctx, invite, player.ID(), s.now().UTC().Format(time.RFC3339))
+	}
 
 	return player, auth.IssueToken(player.ID(), s.secret, sessionTTL, s.now()), nil
 }
@@ -116,19 +123,53 @@ func (s *Service) Login(ctx context.Context, username, password string) (*gamifi
 // Authenticate validates a session token and returns the player id.
 func (s *Service) Authenticate(token string) (string, error) {
 	id, err := auth.VerifyToken(token, s.secret, s.now())
-	if err != nil || id == inviteSub {
+	if err != nil {
 		return "", ErrInvalidCredentials
 	}
 	return id, nil
 }
 
-// IssueInvite mints an invitation token (admin only).
-func (s *Service) IssueInvite() string {
-	return auth.IssueToken(inviteSub, s.secret, inviteTTL, s.now())
+// IssueInvite mints and stores an invitation, returning its token (admin only).
+func (s *Service) IssueInvite(ctx context.Context, createdBy string) (string, error) {
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	if err := s.invites.CreateInvite(ctx, token, createdBy, s.now().UTC().Format(time.RFC3339)); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
-// validInvite reports whether an invitation token is genuine and unexpired.
-func (s *Service) validInvite(token string) bool {
-	sub, err := auth.VerifyToken(token, s.secret, s.now())
-	return err == nil && sub == inviteSub
+// ListInvites returns the issued invitations (admin only).
+func (s *Service) ListInvites(ctx context.Context) ([]ports.Invite, error) {
+	return s.invites.ListInvites(ctx, 100)
+}
+
+// RevokeInvite disables an invitation (admin only).
+func (s *Service) RevokeInvite(ctx context.Context, token string) error {
+	return s.invites.RevokeInvite(ctx, token)
+}
+
+// validInvite reports whether an invitation is pending (exists, not used, not
+// revoked, not expired).
+func (s *Service) validInvite(ctx context.Context, token string) bool {
+	inv, err := s.invites.GetInvite(ctx, token)
+	if err != nil || inv.Revoked || inv.UsedBy != "" {
+		return false
+	}
+	created, err := time.Parse(time.RFC3339, inv.CreatedAt)
+	if err != nil {
+		return true // tolerate an unparseable timestamp rather than lock out
+	}
+	return s.now().Sub(created) < inviteTTL
+}
+
+// randomToken returns an unguessable invitation token.
+func randomToken() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generating invite token: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }

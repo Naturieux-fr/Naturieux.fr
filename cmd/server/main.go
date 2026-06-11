@@ -111,7 +111,8 @@ func main() {
 	if os.Getenv("REGISTRATION_MODE") == "invite" {
 		regMode = account.Invite
 	}
-	accountService := account.NewService(playerRepo, playerRepo, secret, regMode)
+	inviteRepo := sqlite.NewInviteRepository(db)
+	accountService := account.NewService(playerRepo, playerRepo, inviteRepo, secret, regMode)
 	accountHandler := httphandler.NewAccountHandler(accountService)
 	handler.SetRegistrationMode(string(regMode))
 	log.Printf("👤 Account registration: %s", regMode)

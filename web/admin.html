@@ -47,7 +47,7 @@
             <nav class="adm-tabs">
                 <button :class="{ active: tab==='dashboard' }" @click="tab='dashboard'">Tableau de bord</button>
                 <button :class="{ active: tab==='players' }" @click="tab='players'; loadPlayers()">Joueurs</button>
-                <button :class="{ active: tab==='invites' }" @click="tab='invites'">Invitations</button>
+                <button :class="{ active: tab==='invites' }" @click="tab='invites'; loadInvites()">Invitations</button>
                 <button :class="{ active: tab==='species' }" @click="tab='species'">Espèces &amp; photos</button>
             </nav>
 
@@ -107,6 +107,21 @@
                 <div class="invite-out" x-show="inviteLink" style="margin-top:14px">
                     <input type="text" class="ink-field" :value="inviteLink" readonly @focus="$event.target.select()">
                     <button @click="copyInvite()" class="btn btn-quiet" style="margin-top:8px">Copier le lien</button>
+                </div>
+
+                <h3 class="adm-sub" x-show="invites.length">Liens générés</h3>
+                <div class="player-rows" x-show="invites.length">
+                    <template x-for="i in invites" :key="i.token">
+                        <div class="player-row">
+                            <span class="pl-name" style="font-family:monospace;font-size:.8rem" x-text="i.token.slice(0,10) + '…'"></span>
+                            <span class="pl-role" :class="{ adm: inviteStatus(i)==='en attente' }" x-text="inviteStatus(i)"></span>
+                            <span class="pl-stat" x-text="i.created_at ? i.created_at.slice(0,10) : ''"></span>
+                            <button class="btn-mini" @click="copyText(inviteLinkFor(i.token))"
+                                    x-show="inviteStatus(i)==='en attente'">Copier</button>
+                            <button class="btn-trash" @click="revokeInvite(i.token)" title="Révoquer"
+                                    x-show="inviteStatus(i)==='en attente'">✕</button>
+                        </div>
+                    </template>
                 </div>
             </article>
 
@@ -185,6 +200,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.3"></script>
+    <script src="/static/js/admin.js?v=2.4"></script>
 </body>
 </html>

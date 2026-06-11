@@ -31,9 +31,11 @@ type MediaStore interface {
 // maxUploadBytes caps an uploaded photo's size.
 const maxUploadBytes = 10 << 20 // 10 MiB
 
-// Inviter mints player invitation tokens.
+// Inviter mints, lists and revokes player invitation tokens.
 type Inviter interface {
-	IssueInvite() string
+	IssueInvite(ctx context.Context, createdBy string) (string, error)
+	ListInvites(ctx context.Context) ([]ports.Invite, error)
+	RevokeInvite(ctx context.Context, token string) error
 }
 
 // RoomStats reports the number of live multiplayer rooms.
@@ -73,6 +75,8 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/upload", h.requireAdmin(h.handleUploadPhoto))
 	mux.HandleFunc("DELETE /api/v1/admin/photos/{id}", h.requireAdmin(h.handleDeletePhoto))
 	mux.HandleFunc("POST /api/v1/admin/invites", h.requireAuth(h.handleCreateInvite))
+	mux.HandleFunc("GET /api/v1/admin/invites", h.requireAuth(h.handleListInvites))
+	mux.HandleFunc("POST /api/v1/admin/invites/{token}/revoke", h.requireAuth(h.handleRevokeInvite))
 	mux.HandleFunc("GET /api/v1/admin/stats", h.requireAuth(h.handleStats))
 	mux.HandleFunc("GET /api/v1/admin/players", h.requireAuth(h.handleListPlayers))
 	mux.HandleFunc("GET /api/v1/admin/coverage", h.requireAuth(h.handleCoverage))
@@ -206,7 +210,45 @@ func (h *AdminHandler) handleCreateInvite(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusServiceUnavailable, "invitations unavailable")
 		return
 	}
-	writeSuccess(w, map[string]string{"invite": h.inviter.IssueInvite()})
+	by, _ := h.auth.Authorize(r.Context(), bearerToken(r))
+	token, err := h.inviter.IssueInvite(r.Context(), by)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"invite": token})
+}
+
+// handleListInvites returns the issued invitations.
+func (h *AdminHandler) handleListInvites(w http.ResponseWriter, r *http.Request) {
+	if h.inviter == nil {
+		writeError(w, http.StatusServiceUnavailable, "invitations unavailable")
+		return
+	}
+	list, err := h.inviter.ListInvites(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"invites": list})
+}
+
+// handleRevokeInvite disables an invitation link.
+func (h *AdminHandler) handleRevokeInvite(w http.ResponseWriter, r *http.Request) {
+	if h.inviter == nil {
+		writeError(w, http.StatusServiceUnavailable, "invitations unavailable")
+		return
+	}
+	err := h.inviter.RevokeInvite(r.Context(), r.PathValue("token"))
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "invitation not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"message": "revoked"})
 }
 
 // handleLogin authenticates an admin and returns a session token.
