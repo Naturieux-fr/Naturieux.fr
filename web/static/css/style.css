@@ -407,6 +407,15 @@ body {
 }
 .member-logout:hover { opacity: 1; color: var(--rust); }
 
+/* ============================ GRADES ============================ */
+.grade-list { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 8px; }
+.grade-item { text-align: left; }
+.grade-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.grade-title { font-family: var(--serif); font-weight: 600; color: var(--forest-2); }
+.grade-count { font-size: .8rem; color: var(--ink-3); }
+.grade-bar { height: 7px; background: var(--paper-3); border: 1px solid var(--hair); overflow: hidden; }
+.grade-fill { height: 100%; background: linear-gradient(90deg, var(--moss), var(--ochre)); }
+
 /* ============================ HAUTS FAITS ============================ */
 .ach-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

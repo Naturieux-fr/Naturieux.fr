@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.1">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -205,6 +205,21 @@
             <article class="plate report-plate reveal" style="--d:0">
                 <span class="plate-no">Cabinet</span>
                 <h2 class="report-title">Cabinet des hauts faits</h2>
+
+                <h3 class="adm-sub" style="margin-top:8px">Grades de spécialité</h3>
+                <div class="grade-list">
+                    <template x-for="g in grades" :key="g.id">
+                        <div class="grade-item">
+                            <div class="grade-head">
+                                <span class="grade-title" x-text="g.label"></span>
+                                <span class="grade-count" x-text="g.nextAt ? `${g.count} / ${g.nextAt}` : `${g.count} ✦`"></span>
+                            </div>
+                            <div class="grade-bar"><div class="grade-fill" :style="`width:${g.progressPct}%`"></div></div>
+                        </div>
+                    </template>
+                </div>
+
+                <h3 class="adm-sub">Hauts faits</h3>
                 <p class="plate-lead" x-text="`${achievementsUnlockedCount} / ${achievementsCatalogue.length} obtenus`"></p>
 
                 <div class="ach-grid">
@@ -516,6 +531,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.0"></script>
+    <script src="/static/js/app.js?v=3.1"></script>
 </body>
 </html>

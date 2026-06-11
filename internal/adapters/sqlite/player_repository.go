@@ -24,7 +24,8 @@ func NewPlayerRepository(db *sql.DB) *PlayerRepository {
 }
 
 const playerColumns = `id, username, total_xp, level, total_games, total_correct,
-	total_questions, best_streak, daily_streak, achievements, last_played_at, created_at`
+	total_questions, best_streak, daily_streak, achievements, last_played_at, created_at,
+	category_correct`
 
 // Create creates a new player.
 func (r *PlayerRepository) Create(ctx context.Context, player *gamification.Player) error {
@@ -35,13 +36,18 @@ func (r *PlayerRepository) Create(ctx context.Context, player *gamification.Play
 		return fmt.Errorf("encoding achievements: %w", err)
 	}
 
+	categoryCorrect, err := json.Marshal(snap.CategoryCorrect)
+	if err != nil {
+		return fmt.Errorf("encoding category counts: %w", err)
+	}
+
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO players (`+playerColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		snap.ID, snap.Username, snap.TotalXP, snap.Level, snap.TotalGames,
 		snap.TotalCorrect, snap.TotalQuestions, snap.BestStreak, snap.DailyStreak,
 		string(achievements), formatNullableTime(snap.LastPlayedAt),
-		snap.CreatedAt.Format(time.RFC3339Nano),
+		snap.CreatedAt.Format(time.RFC3339Nano), string(categoryCorrect),
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -75,14 +81,19 @@ func (r *PlayerRepository) Update(ctx context.Context, player *gamification.Play
 		return fmt.Errorf("encoding achievements: %w", err)
 	}
 
+	categoryCorrect, err := json.Marshal(snap.CategoryCorrect)
+	if err != nil {
+		return fmt.Errorf("encoding category counts: %w", err)
+	}
+
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE players SET username = ?, total_xp = ?, level = ?, total_games = ?,
 			total_correct = ?, total_questions = ?, best_streak = ?, daily_streak = ?,
-			achievements = ?, last_played_at = ?
+			achievements = ?, last_played_at = ?, category_correct = ?
 		WHERE id = ?`,
 		snap.Username, snap.TotalXP, snap.Level, snap.TotalGames,
 		snap.TotalCorrect, snap.TotalQuestions, snap.BestStreak, snap.DailyStreak,
-		string(achievements), formatNullableTime(snap.LastPlayedAt), snap.ID,
+		string(achievements), formatNullableTime(snap.LastPlayedAt), string(categoryCorrect), snap.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating player: %w", err)
@@ -127,13 +138,14 @@ type rowScanner interface {
 func scanPlayer(row rowScanner) (*gamification.Player, error) {
 	var snap gamification.PlayerSnapshot
 	var achievements string
+	var categoryCorrect sql.NullString
 	var lastPlayedAt sql.NullString
 	var createdAt string
 
 	err := row.Scan(
 		&snap.ID, &snap.Username, &snap.TotalXP, &snap.Level, &snap.TotalGames,
 		&snap.TotalCorrect, &snap.TotalQuestions, &snap.BestStreak, &snap.DailyStreak,
-		&achievements, &lastPlayedAt, &createdAt,
+		&achievements, &lastPlayedAt, &createdAt, &categoryCorrect,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ports.ErrNotFound
@@ -144,6 +156,11 @@ func scanPlayer(row rowScanner) (*gamification.Player, error) {
 
 	if err := json.Unmarshal([]byte(achievements), &snap.Achievements); err != nil {
 		return nil, fmt.Errorf("decoding achievements: %w", err)
+	}
+	if categoryCorrect.Valid && categoryCorrect.String != "" {
+		if err := json.Unmarshal([]byte(categoryCorrect.String), &snap.CategoryCorrect); err != nil {
+			return nil, fmt.Errorf("decoding category counts: %w", err)
+		}
 	}
 	if snap.LastPlayedAt, err = parseNullableTime(lastPlayedAt); err != nil {
 		return nil, fmt.Errorf("parsing last_played_at: %w", err)

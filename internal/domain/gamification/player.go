@@ -9,18 +9,19 @@ import (
 
 // Player represents a game player with progression.
 type Player struct {
-	id             string
-	username       string
-	totalXP        int
-	level          int
-	totalGames     int
-	totalCorrect   int
-	totalQuestions int
-	bestStreak     int
-	achievements   []Achievement
-	dailyStreak    int
-	lastPlayedAt   *time.Time
-	createdAt      time.Time
+	id              string
+	username        string
+	totalXP         int
+	level           int
+	totalGames      int
+	totalCorrect    int
+	totalQuestions  int
+	bestStreak      int
+	achievements    []Achievement
+	dailyStreak     int
+	categoryCorrect map[string]int // correct answers per category (for grades)
+	lastPlayedAt    *time.Time
+	createdAt       time.Time
 }
 
 // NewPlayer creates a new player.
@@ -33,12 +34,33 @@ func NewPlayer(id, username string) (*Player, error) {
 	}
 
 	return &Player{
-		id:           id,
-		username:     username,
-		level:        1,
-		achievements: make([]Achievement, 0),
-		createdAt:    time.Now(),
+		id:              id,
+		username:        username,
+		level:           1,
+		achievements:    make([]Achievement, 0),
+		categoryCorrect: make(map[string]int),
+		createdAt:       time.Now(),
 	}, nil
+}
+
+// AddCategoryCorrect credits n correct answers to a category (for grades).
+func (p *Player) AddCategoryCorrect(category string, n int) {
+	if category == "" || n <= 0 {
+		return
+	}
+	if p.categoryCorrect == nil {
+		p.categoryCorrect = make(map[string]int)
+	}
+	p.categoryCorrect[category] += n
+}
+
+// CategoryCorrect returns a copy of the per-category correct-answer counts.
+func (p *Player) CategoryCorrect() map[string]int {
+	out := make(map[string]int, len(p.categoryCorrect))
+	for k, v := range p.categoryCorrect {
+		out[k] = v
+	}
+	return out
 }
 
 // ID returns the player ID.
@@ -191,6 +213,10 @@ func (p *Player) checkAchievements() []Achievement {
 		{Dedicated, func() bool { return p.dailyStreak >= 7 }},
 		{LevelTen, func() bool { return p.level >= 10 }},
 		{LevelFifty, func() bool { return p.level >= 50 }},
+		{MammalExpert, func() bool { return p.categoryCorrect["Mammalia"] >= 100 }},
+		{BirdWatcher, func() bool { return p.categoryCorrect["Aves"] >= 100 }},
+		{BugHunter, func() bool { return p.categoryCorrect["Insecta"] >= 100 }},
+		{Botanist, func() bool { return p.categoryCorrect["Plantae"] >= 100 }},
 	}
 
 	for _, check := range achievementChecks {
@@ -222,35 +248,37 @@ type LevelUpEvent struct {
 // PlayerSnapshot is a serializable representation of a Player, used for
 // persistence and reconstruction.
 type PlayerSnapshot struct {
-	ID             string        `json:"id"`
-	Username       string        `json:"username"`
-	TotalXP        int           `json:"total_xp"`
-	Level          int           `json:"level"`
-	TotalGames     int           `json:"total_games"`
-	TotalCorrect   int           `json:"total_correct"`
-	TotalQuestions int           `json:"total_questions"`
-	BestStreak     int           `json:"best_streak"`
-	Achievements   []Achievement `json:"achievements,omitempty"`
-	DailyStreak    int           `json:"daily_streak"`
-	LastPlayedAt   *time.Time    `json:"last_played_at,omitempty"`
-	CreatedAt      time.Time     `json:"created_at"`
+	ID              string         `json:"id"`
+	Username        string         `json:"username"`
+	TotalXP         int            `json:"total_xp"`
+	Level           int            `json:"level"`
+	TotalGames      int            `json:"total_games"`
+	TotalCorrect    int            `json:"total_correct"`
+	TotalQuestions  int            `json:"total_questions"`
+	BestStreak      int            `json:"best_streak"`
+	Achievements    []Achievement  `json:"achievements,omitempty"`
+	DailyStreak     int            `json:"daily_streak"`
+	CategoryCorrect map[string]int `json:"category_correct,omitempty"`
+	LastPlayedAt    *time.Time     `json:"last_played_at,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
 }
 
 // Snapshot returns a serializable representation of the player.
 func (p *Player) Snapshot() PlayerSnapshot {
 	return PlayerSnapshot{
-		ID:             p.id,
-		Username:       p.username,
-		TotalXP:        p.totalXP,
-		Level:          p.level,
-		TotalGames:     p.totalGames,
-		TotalCorrect:   p.totalCorrect,
-		TotalQuestions: p.totalQuestions,
-		BestStreak:     p.bestStreak,
-		Achievements:   p.achievements,
-		DailyStreak:    p.dailyStreak,
-		LastPlayedAt:   p.lastPlayedAt,
-		CreatedAt:      p.createdAt,
+		ID:              p.id,
+		Username:        p.username,
+		TotalXP:         p.totalXP,
+		Level:           p.level,
+		TotalGames:      p.totalGames,
+		TotalCorrect:    p.totalCorrect,
+		TotalQuestions:  p.totalQuestions,
+		BestStreak:      p.bestStreak,
+		Achievements:    p.achievements,
+		DailyStreak:     p.dailyStreak,
+		CategoryCorrect: p.CategoryCorrect(),
+		LastPlayedAt:    p.lastPlayedAt,
+		CreatedAt:       p.createdAt,
 	}
 }
 
@@ -272,6 +300,9 @@ func RestorePlayer(snap PlayerSnapshot) (*Player, error) {
 		player.achievements = snap.Achievements
 	}
 	player.dailyStreak = snap.DailyStreak
+	if snap.CategoryCorrect != nil {
+		player.categoryCorrect = snap.CategoryCorrect
+	}
 	player.lastPlayedAt = snap.LastPlayedAt
 	if !snap.CreatedAt.IsZero() {
 		player.createdAt = snap.CreatedAt

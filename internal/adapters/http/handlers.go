@@ -321,17 +321,18 @@ func questionToDTO(q *quiz.Question) QuestionDTO {
 
 // PlayerDTO represents a player profile for API responses.
 type PlayerDTO struct {
-	ID           string   `json:"id"`
-	Username     string   `json:"username"`
-	Level        int      `json:"level"`
-	TotalXP      int      `json:"total_xp"`
-	XPInLevel    int      `json:"xp_in_level"`
-	XPForLevel   int      `json:"xp_for_level"`
-	TotalGames   int      `json:"total_games"`
-	Accuracy     float64  `json:"accuracy"`
-	BestStreak   int      `json:"best_streak"`
-	DailyStreak  int      `json:"daily_streak"`
-	Achievements []string `json:"achievements"`
+	ID              string         `json:"id"`
+	Username        string         `json:"username"`
+	Level           int            `json:"level"`
+	TotalXP         int            `json:"total_xp"`
+	XPInLevel       int            `json:"xp_in_level"`
+	XPForLevel      int            `json:"xp_for_level"`
+	TotalGames      int            `json:"total_games"`
+	Accuracy        float64        `json:"accuracy"`
+	BestStreak      int            `json:"best_streak"`
+	DailyStreak     int            `json:"daily_streak"`
+	Achievements    []string       `json:"achievements"`
+	CategoryCorrect map[string]int `json:"category_correct"`
 }
 
 // playerToDTO converts a domain Player to a DTO.
@@ -343,17 +344,18 @@ func playerToDTO(p *gamification.Player) PlayerDTO {
 
 	xpForLevel := gamification.XPForLevel(p.Level())
 	return PlayerDTO{
-		ID:           p.ID(),
-		Username:     p.Username(),
-		Level:        p.Level(),
-		TotalXP:      p.TotalXP(),
-		XPInLevel:    xpForLevel - p.XPToNextLevel(),
-		XPForLevel:   xpForLevel,
-		TotalGames:   p.TotalGames(),
-		Accuracy:     p.Accuracy(),
-		BestStreak:   p.BestStreak(),
-		DailyStreak:  p.DailyStreak(),
-		Achievements: achievements,
+		ID:              p.ID(),
+		Username:        p.Username(),
+		Level:           p.Level(),
+		TotalXP:         p.TotalXP(),
+		XPInLevel:       xpForLevel - p.XPToNextLevel(),
+		XPForLevel:      xpForLevel,
+		TotalGames:      p.TotalGames(),
+		Accuracy:        p.Accuracy(),
+		BestStreak:      p.BestStreak(),
+		DailyStreak:     p.DailyStreak(),
+		Achievements:    achievements,
+		CategoryCorrect: p.CategoryCorrect(),
 	}
 }
 

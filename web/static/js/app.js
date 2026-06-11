@@ -42,8 +42,21 @@ function quizApp() {
             totalGames: 0,
             bestStreak: 0,
             dailyStreak: 0,
-            achievements: []
+            achievements: [],
+            categoryCorrect: {}
         },
+
+        // Tiered grades: a title per category, earned by correct answers.
+        gradeTiers: [100, 500, 2000],
+        gradeDefs: [
+            { id: 'Mammalia', title: 'Mammalogiste' },
+            { id: 'Aves', title: 'Ornithologue' },
+            { id: 'Reptilia', title: 'Herpétologue' },
+            { id: 'Amphibia', title: 'Batrachologue' },
+            { id: 'Insecta', title: 'Entomologiste' },
+            { id: 'Plantae', title: 'Botaniste' },
+            { id: 'Fungi', title: 'Mycologue' }
+        ],
         usernameInput: '',
         passwordInput: '',
         loginUsername: '',
@@ -257,7 +270,26 @@ function quizApp() {
             this.player.bestStreak = data.best_streak;
             this.player.dailyStreak = data.daily_streak || 0;
             this.player.achievements = data.achievements || [];
+            this.player.categoryCorrect = data.category_correct || {};
             this.updateXpPercent();
+        },
+
+        // Build the player's grades (one per category) with tier and progress.
+        get grades() {
+            const roman = ['', 'I', 'II', 'III'];
+            return this.gradeDefs.map(def => {
+                const count = (this.player.categoryCorrect || {})[def.id] || 0;
+                let tier = 0;
+                for (const t of this.gradeTiers) { if (count >= t) tier++; }
+                const nextAt = tier < this.gradeTiers.length ? this.gradeTiers[tier] : null;
+                const prevAt = tier > 0 ? this.gradeTiers[tier - 1] : 0;
+                const pct = nextAt ? Math.round(((count - prevAt) / (nextAt - prevAt)) * 100) : 100;
+                return {
+                    id: def.id,
+                    label: tier === 0 ? `${def.title} — Apprenti` : `${def.title} ${roman[tier]}`,
+                    count, tier, nextAt, progressPct: Math.max(0, Math.min(100, pct))
+                };
+            });
         },
 
         // Register a real account (username + password).

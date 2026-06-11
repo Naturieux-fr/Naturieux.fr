@@ -82,6 +82,7 @@ func migrate(db *sql.DB) error {
 	for _, c := range []struct{ table, column, def string }{
 		{"players", "role", "TEXT NOT NULL DEFAULT 'player'"},
 		{"players", "password_hash", "TEXT NOT NULL DEFAULT ''"},
+		{"players", "category_correct", "TEXT NOT NULL DEFAULT '{}'"},
 	} {
 		has, err := hasColumn(db, c.table, c.column)
 		if err != nil {

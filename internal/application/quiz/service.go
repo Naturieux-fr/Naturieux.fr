@@ -287,6 +287,10 @@ func (s *Service) processLevelUps(player *gamification.Player, xp int) {
 
 // processAchievements handles achievement unlocks.
 func (s *Service) processAchievements(_ context.Context, player *gamification.Player, session *quiz.Session) {
+	// Credit correct answers to the session's category so per-category grades
+	// progress (no-op for the "all taxa" filter).
+	player.AddCategoryCorrect(session.TaxonFilter(), session.CorrectCount())
+
 	achievements := player.RecordGame(
 		session.CorrectCount(),
 		session.QuestionsCount(),
