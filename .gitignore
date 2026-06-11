@@ -65,3 +65,8 @@ logs/
 
 # Local run data (TAXREF dump, photos, db)
 .run/
+
+# Node / Playwright
+node_modules/
+playwright-report/
+test-results/

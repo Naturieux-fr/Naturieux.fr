@@ -1,0 +1,11 @@
+{
+  "name": "naturieux-e2e",
+  "private": true,
+  "description": "End-to-end tests for Naturieux (Playwright).",
+  "scripts": {
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
