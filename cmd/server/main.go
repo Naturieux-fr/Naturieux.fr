@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -175,6 +176,21 @@ func main() {
 	// Serve the legal / privacy (RGPD) page
 	mux.HandleFunc("/legal", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/legal.html")
+	})
+
+	// Regions present in the imported occurrence data (for the lieu filter).
+	mux.HandleFunc("GET /api/v1/regions", func(w http.ResponseWriter, r *http.Request) {
+		regions := []string{}
+		if taxrefRepo != nil {
+			if rs, err := taxrefRepo.ListRegions(r.Context()); err == nil {
+				regions = rs
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"data":    map[string]interface{}{"regions": regions},
+		})
 	})
 
 	// PWA: web app manifest and service worker (served at root for full scope).

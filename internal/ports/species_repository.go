@@ -15,6 +15,8 @@ type SpeciesFilter struct {
 	HasPhotos   bool   // Only species with photos
 	ExcludeIDs  []int  // Species IDs to exclude
 	Difficulty  string // Preferred photo difficulty (sources that support it)
+	Month       int    // Only species observed in this month (1-12); 0 = any
+	Region      string // Only species observed in this region; "" = any
 }
 
 // SpeciesRepository defines the interface for species data access.

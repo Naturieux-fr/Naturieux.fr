@@ -147,6 +147,8 @@ type StartSessionRequest struct {
 	QuizTypes     []string `json:"quiz_types"`
 	TaxonFilter   string   `json:"taxon_filter"`
 	QuestionCount int      `json:"question_count"`
+	Month         int      `json:"month"`  // lieu/saison filter (1-12; 0 = any)
+	Region        string   `json:"region"` // lieu/saison filter ("" = any)
 }
 
 // StartSessionResponse represents the response for starting a session.
@@ -232,6 +234,8 @@ func (h *Handler) HandleStartSession(w http.ResponseWriter, r *http.Request) {
 		QuizTypes:     quizTypes,
 		TaxonFilter:   req.TaxonFilter,
 		QuestionCount: req.QuestionCount,
+		Month:         req.Month,
+		Region:        req.Region,
 	}
 
 	result, err := h.quizService.StartSession(r.Context(), serviceReq)

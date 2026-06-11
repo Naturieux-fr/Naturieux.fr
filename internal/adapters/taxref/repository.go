@@ -154,6 +154,15 @@ func (r *Repository) randomSpecies(ctx context.Context, filter ports.SpeciesFilt
 			args = append(args, id)
 		}
 	}
+	// Lieu/saison filters (from the imported occurrence data).
+	if filter.Month >= 1 && filter.Month <= 12 {
+		where = append(where, "s.cd_nom IN (SELECT cd_nom FROM species_months WHERE month = ?)")
+		args = append(args, filter.Month)
+	}
+	if filter.Region != "" {
+		where = append(where, "s.cd_nom IN (SELECT cd_nom FROM species_regions WHERE region = ?)")
+		args = append(args, filter.Region)
+	}
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -281,6 +290,25 @@ func (r *Repository) scanSpecies(row rowScanner) (*species.Species, error) {
 	sp.SetRank("species")
 	sp.SetFamily(family)
 	return sp, nil
+}
+
+// ListRegions returns the distinct regions present in the imported occurrence
+// data, alphabetically (empty when no occurrence data has been imported).
+func (r *Repository) ListRegions(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT region FROM species_regions ORDER BY region`)
+	if err != nil {
+		return nil, fmt.Errorf("taxref regions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]string, 0)
+	for rows.Next() {
+		var region string
+		if err := rows.Scan(&region); err != nil {
+			return nil, err
+		}
+		out = append(out, region)
+	}
+	return out, rows.Err()
 }
 
 // GetOtherFamilies returns species from families different from the given

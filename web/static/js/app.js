@@ -111,9 +111,13 @@ function quizApp() {
             difficulty: 'beginner',
             taxon: '',
             questionCount: 10,
-            epreuve: 'image',     // image | flash | silhouette | partial | sound
-            answerMode: 'choices' // choices | free
+            epreuve: 'image',     // image | flash | silhouette | partial | sound | family
+            answerMode: 'choices', // choices | free
+            region: '',           // lieu filter (requires imported occurrence data)
+            month: 0              // saison filter: 0=toutes, 1-12
         },
+        regions: [],
+        frenchMonths: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
 
         // Game format: standard, chrono (global countdown), survie (1 mistake ends it)
         gameFormat: 'standard',
@@ -218,6 +222,8 @@ function quizApp() {
                 const reset = params.get('reset');
                 if (reset) { this.resetToken = reset; this.screen = 'reset'; }
             } catch (e) {}
+            // Regions are only available once occurrence data has been imported.
+            try { this.regions = (await this.api('/regions', 'GET')).regions || []; } catch (e) {}
             try {
                 const data = await this.api('/config', 'GET');
                 this.devMode = data.dev_mode;
@@ -513,7 +519,9 @@ function quizApp() {
                     difficulty: this.settings.difficulty,
                     quiz_types: [this.settings.epreuve],
                     taxon_filter: this.settings.taxon,
-                    question_count: count
+                    question_count: count,
+                    region: this.settings.region,
+                    month: this.settings.month
                 });
 
                 this.sessionId = data.session_id;

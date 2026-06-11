@@ -62,6 +62,24 @@ CREATE TABLE IF NOT EXISTS taxref_sounds (
 
 CREATE INDEX IF NOT EXISTS idx_taxref_sounds_cdnom ON taxref_sounds(cd_nom);
 
+-- Aggregated occurrence presence per species, imported once from a downloaded
+-- dataset (GBIF/INPN). No runtime API: these tables drive the lieu/saison
+-- filters. A row means "this species is observed in this month / region".
+CREATE TABLE IF NOT EXISTS species_months (
+	cd_nom INTEGER NOT NULL,
+	month  INTEGER NOT NULL,
+	PRIMARY KEY (cd_nom, month)
+);
+
+CREATE TABLE IF NOT EXISTS species_regions (
+	cd_nom INTEGER NOT NULL,
+	region TEXT NOT NULL,
+	PRIMARY KEY (cd_nom, region)
+);
+
+CREATE INDEX IF NOT EXISTS idx_species_months_m ON species_months(month);
+CREATE INDEX IF NOT EXISTS idx_species_regions_r ON species_regions(region);
+
 -- Metadata (e.g. the imported TAXREF version).
 CREATE TABLE IF NOT EXISTS taxref_meta (
 	key   TEXT PRIMARY KEY,

@@ -20,6 +20,8 @@ type QuestionFactory interface {
 	// restricted to taxonFilter (a category); an empty taxonFilter falls back
 	// to the factory's default.
 	CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, taxonFilter string) (*quiz.Question, error)
+	// CreateQuestionFiltered also restricts by month (1-12) and/or region.
+	CreateQuestionFiltered(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, taxonFilter string, month int, region string) (*quiz.Question, error)
 	// CreateQuestionFor builds a question for a specific species (curated quizzes).
 	CreateQuestionFor(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, speciesID int) (*quiz.Question, error)
 }
@@ -80,6 +82,20 @@ func (f *questionFactory) CreateQuestion(
 	difficulty quiz.Difficulty,
 	taxonFilter string,
 ) (*quiz.Question, error) {
+	return f.CreateQuestionFiltered(ctx, quizType, difficulty, taxonFilter, 0, "")
+}
+
+// CreateQuestionFiltered generates a question, additionally restricting the
+// correct species to those observed in the given month (1-12; 0 = any) and/or
+// region ("" = any), using the imported occurrence data.
+func (f *questionFactory) CreateQuestionFiltered(
+	ctx context.Context,
+	quizType quiz.QuizType,
+	difficulty quiz.Difficulty,
+	taxonFilter string,
+	month int,
+	region string,
+) (*quiz.Question, error) {
 	if quizType == quiz.SoundQuiz {
 		return f.createSoundQuestion(ctx, difficulty)
 	}
@@ -102,6 +118,8 @@ func (f *questionFactory) CreateQuestion(
 		Limit:       1,
 		HasPhotos:   true,
 		Difficulty:  string(difficulty),
+		Month:       month,
+		Region:      region,
 	}
 
 	correctSpecies, err := f.speciesRepo.GetRandom(ctx, filter)

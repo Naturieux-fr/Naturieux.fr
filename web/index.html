@@ -178,6 +178,20 @@
                         </div>
                     </div>
 
+                    <div class="form-block" x-show="regions.length">
+                        <label class="form-legend">Lieu &amp; saison</label>
+                        <div class="field-row">
+                            <select class="ink-select" x-model="settings.region">
+                                <option value="">Toute la France</option>
+                                <template x-for="rg in regions" :key="rg"><option :value="rg" x-text="rg"></option></template>
+                            </select>
+                            <select class="ink-select" x-model.number="settings.month">
+                                <option :value="0">Toute l'année</option>
+                                <template x-for="(m, i) in frenchMonths" :key="i"><option :value="i+1" x-text="m"></option></template>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-block">
                         <label class="form-legend">Format de jeu</label>
                         <div class="grade-grid">
@@ -756,7 +770,7 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=4.0"></script>
+    <script src="/static/js/app.js?v=4.1"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

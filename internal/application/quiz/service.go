@@ -63,6 +63,8 @@ type StartSessionRequest struct {
 	QuizTypes     []quiz.QuizType
 	TaxonFilter   string
 	QuestionCount int
+	Month         int    // lieu/saison: only species observed this month (0 = any)
+	Region        string // lieu/saison: only species observed in this region ("" = any)
 }
 
 // StartSessionResponse contains the result of starting a session.
@@ -175,7 +177,7 @@ func (s *Service) generateQuestions(ctx context.Context, req StartSessionRequest
 
 	for i := 0; i < req.QuestionCount; i++ {
 		quizType := req.QuizTypes[i%len(req.QuizTypes)]
-		question, err := s.questionFactory.CreateQuestion(ctx, quizType, req.Difficulty, req.TaxonFilter)
+		question, err := s.questionFactory.CreateQuestionFiltered(ctx, quizType, req.Difficulty, req.TaxonFilter, req.Month, req.Region)
 		if err != nil {
 			continue
 		}
