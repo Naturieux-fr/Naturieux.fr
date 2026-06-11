@@ -1,12 +1,6 @@
-# Git
-.git
-.gitignore
-.gitattributes
-
-# Local tooling caches
-.claude
-.serena
-.playwright-mcp
+# Hidden files & directories (VCS metadata, IDE/editor and local tool caches).
+# The build needs none of them; one generic rule keeps the context lean.
+.*
 
 # Build artifacts
 bin/
@@ -30,7 +24,3 @@ docs/
 *.md
 QUALITY_REPORT.md
 SECURITY_REPORT.md
-
-# IDE
-.idea/
-.vscode/
