@@ -125,7 +125,8 @@ func main() {
 	accountService := account.NewService(playerRepo, playerRepo, inviteRepo, secret, regMode)
 	accountHandler := httphandler.NewAccountHandler(accountService)
 	handler.SetRegistrationMode(string(regMode))
-	handler.SetAuthenticator(accountService) // gameplay endpoints derive the player from the session token
+	handler.SetAuthenticator(accountService)             // gameplay endpoints derive the player from the session token
+	handler.SetMissTracker(sqlite.NewMissRepository(db)) // enables the revision mode
 	log.Printf("👤 Account registration: %s", regMode)
 
 	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo, mediaStore, accountService)

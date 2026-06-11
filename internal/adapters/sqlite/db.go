@@ -51,6 +51,16 @@ CREATE TABLE IF NOT EXISTS invites (
 	revoked    INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS player_misses (
+	player_id TEXT NOT NULL,
+	cd_nom    INTEGER NOT NULL,
+	misses    INTEGER NOT NULL DEFAULT 0,
+	last_at   TEXT NOT NULL,
+	PRIMARY KEY (player_id, cd_nom)
+);
+
+CREATE INDEX IF NOT EXISTS idx_misses_player ON player_misses(player_id, misses DESC);
+
 CREATE TABLE IF NOT EXISTS challenge_scores (
 	period     TEXT NOT NULL,
 	period_key TEXT NOT NULL,

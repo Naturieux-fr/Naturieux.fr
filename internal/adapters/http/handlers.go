@@ -2,6 +2,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -27,7 +28,18 @@ type Handler struct {
 	mediaDir         string // local media directory, for serving owned photos
 	registrationMode string // "open" or "invite" (surfaced in /config)
 	auth             Authenticator
+	misses           MissTracker
 }
+
+// MissTracker records and retrieves the species a player gets wrong.
+type MissTracker interface {
+	RecordMiss(ctx context.Context, playerID string, cdNom int) error
+	DecayMiss(ctx context.Context, playerID string, cdNom int) error
+	TopMisses(ctx context.Context, playerID string, limit int) ([]int, error)
+}
+
+// SetMissTracker enables the revision mode (tracking wrong answers).
+func (h *Handler) SetMissTracker(m MissTracker) { h.misses = m }
 
 // SetRegistrationMode records the account registration policy for /config.
 func (h *Handler) SetRegistrationMode(mode string) {
@@ -282,6 +294,16 @@ func (h *Handler) HandleSubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track misses so the player can revise species they got wrong (and retire
+	// them from the revision pool once mastered).
+	if h.misses != nil && result.CorrectSpeciesID > 0 {
+		if result.IsCorrect {
+			_ = h.misses.DecayMiss(r.Context(), session.UserID(), result.CorrectSpeciesID)
+		} else {
+			_ = h.misses.RecordMiss(r.Context(), session.UserID(), result.CorrectSpeciesID)
+		}
+	}
+
 	response := SubmitAnswerResponse{
 		IsCorrect:        result.IsCorrect,
 		Score:            result.Score,
@@ -300,6 +322,53 @@ func (h *Handler) HandleSubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSuccess(w, response)
+}
+
+// HandleRevision handles POST /api/v1/quiz/revision — a session built from the
+// species the player has previously missed.
+func (h *Handler) HandleRevision(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if h.misses == nil {
+		writeError(w, http.StatusServiceUnavailable, "révision indisponible")
+		return
+	}
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req) // body optional when authenticated
+	userID, ok := h.resolveUserID(w, r, req.UserID)
+	if !ok {
+		return
+	}
+	if userID == "" {
+		writeError(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+
+	cdNoms, err := h.misses.TopMisses(r.Context(), userID, 10)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(cdNoms) == 0 {
+		writeError(w, http.StatusNotFound, "rien à réviser pour l'instant — joue quelques parties d'abord")
+		return
+	}
+	result, err := h.quizService.StartRevisionSession(r.Context(), userID, cdNoms)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	resp := StartSessionResponse{
+		SessionID:      result.SessionID,
+		TotalQuestions: result.TotalQuestions,
+		Question:       questionToDTO(result.FirstQuestion),
+	}
+	resp.Question.MediaURL = protectedImageURL(result.SessionID, result.FirstQuestion)
+	writeSuccess(w, resp)
 }
 
 // HandleAbandonSession handles POST /api/v1/quiz/abandon
@@ -665,6 +734,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/quiz/start", h.HandleStartSession)
 	mux.HandleFunc("/api/v1/quiz/answer", h.HandleSubmitAnswer)
 	mux.HandleFunc("/api/v1/quiz/abandon", h.HandleAbandonSession)
+	mux.HandleFunc("POST /api/v1/quiz/revision", h.HandleRevision)
 	mux.HandleFunc("GET /api/v1/quiz/{session_id}/image", h.HandleQuizImage)
 	mux.HandleFunc("POST /api/v1/quiz/{session_id}/guess", h.HandleGuess)
 }

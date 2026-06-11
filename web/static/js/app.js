@@ -511,6 +511,29 @@ function quizApp() {
             }
         },
 
+        // Revision: a session built from the species the player has missed.
+        async startRevision() {
+            this.loading = true;
+            this.error = '';
+            this.gameFormat = 'standard';
+            this.setTimeLimit();
+            this._preGame = { level: this.player.level, achievements: [...(this.player.achievements || [])], dailyStreak: this.player.dailyStreak };
+            try {
+                const data = await this.api('/quiz/revision', 'POST', { user_id: this.player.id });
+                this.sessionId = data.session_id;
+                this.totalQuestions = data.total_questions;
+                this.currentQuestion = 1;
+                this.score = 0; this.streak = 0; this.bestStreak = 0; this.correctCount = 0; this.accuracy = 0;
+                this.sessionComplete = false;
+                this.loadQuestion(data.question);
+                this.screen = 'quiz';
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
         // Load question. The image is fetched as a blob and shown via an
         // object URL, so the underlying file URL is never exposed on the <img>
         // element (no right-click "copy image address", no plain path in the

@@ -117,6 +117,26 @@ func (s *Service) StartSession(ctx context.Context, req StartSessionRequest) (*S
 	}, nil
 }
 
+// StartRevisionSession builds a session from the species a player has missed,
+// so they can revise them (one question per cd_nom).
+func (s *Service) StartRevisionSession(ctx context.Context, userID string, cdNoms []int) (*StartSessionResponse, error) {
+	if len(cdNoms) == 0 {
+		return nil, errors.New("nothing to revise")
+	}
+	questions := make([]*quiz.Question, 0, len(cdNoms))
+	for _, cd := range cdNoms {
+		q, err := s.questionFactory.CreateQuestionFor(ctx, quiz.ImageQuiz, quiz.Intermediate, cd)
+		if err != nil {
+			continue
+		}
+		questions = append(questions, q)
+	}
+	if len(questions) == 0 {
+		return nil, errors.New("could not build revision questions")
+	}
+	return s.StartSessionWithQuestions(ctx, userID, questions)
+}
+
 // StartSessionWithQuestions starts a session from a preset question set (used
 // by daily/weekly challenges so every player answers the same questions).
 func (s *Service) StartSessionWithQuestions(ctx context.Context, userID string, questions []*quiz.Question) (*StartSessionResponse, error) {

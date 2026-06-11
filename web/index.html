@@ -203,6 +203,7 @@
                         <button @click="openChallenge('daily')" class="btn btn-quiet">⚡ Défi du jour</button>
                         <button @click="openChallenge('weekly')" class="btn btn-quiet">📅 Défi de la semaine</button>
                         <button @click="openMulti()" class="btn btn-quiet">⚔ Duel entre naturalistes</button>
+                        <button @click="startRevision()" class="btn btn-quiet">🔁 Réviser mes erreurs</button>
                         <button @click="openLocate()" class="btn btn-quiet">📍 Où est l'espèce ?</button>
                         <button @click="openLibrary()" class="btn btn-quiet">📖 Bibliothèque</button>
                         <button x-show="canWrite" @click="openEditor()" class="btn btn-quiet">✍ Rédaction</button>
@@ -736,7 +737,7 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.7"></script>
+    <script src="/static/js/app.js?v=3.8"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
