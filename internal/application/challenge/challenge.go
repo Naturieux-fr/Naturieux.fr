@@ -27,6 +27,13 @@ func (p Period) IsValid() bool { return p == Daily || p == Weekly }
 // QuestionMaker produces quiz questions; satisfied by the quiz factory.
 type QuestionMaker interface {
 	CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, taxonFilter string) (*quiz.Question, error)
+	CreateQuestionFor(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, speciesID int) (*quiz.Question, error)
+}
+
+// CuratedSource supplies an admin-scheduled curated quiz for a period, if any.
+type CuratedSource interface {
+	Scheduled(ctx context.Context, period, key string) (quizID string, ok bool, err error)
+	QuizSpecies(ctx context.Context, quizID string) ([]int, error)
 }
 
 // defaults for an auto-generated challenge.
@@ -40,20 +47,30 @@ var defaultDifficulty = quiz.Intermediate
 // sessions to the challenge they belong to.
 type Manager struct {
 	maker   QuestionMaker
+	curated CuratedSource // optional; when set, admin-scheduled quizzes win
 	mu      sync.Mutex
 	cache   map[string][]*quiz.Question // "daily:2026-06-11" -> questions
 	binding map[string]string           // sessionID -> "daily:2026-06-11"
 	now     func() time.Time
 }
 
-// NewManager creates a challenge manager.
-func NewManager(maker QuestionMaker) *Manager {
+// NewManager creates a challenge manager. curated may be nil (auto only).
+func NewManager(maker QuestionMaker, curated CuratedSource) *Manager {
 	return &Manager{
 		maker:   maker,
+		curated: curated,
 		cache:   make(map[string][]*quiz.Question),
 		binding: make(map[string]string),
 		now:     time.Now,
 	}
+}
+
+// Invalidate drops the cached questions for a period key (e.g. after an admin
+// schedules a curated quiz), so the next player gets the new set.
+func (m *Manager) Invalidate(period Period, key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.cache, string(period)+":"+key)
 }
 
 // Key returns the period key for the current time (e.g. "2026-06-11" for daily,
@@ -83,14 +100,17 @@ func (m *Manager) Questions(ctx context.Context, p Period) (string, []*quiz.Ques
 	}
 	m.mu.Unlock()
 
-	// Generate outside the lock.
-	qs := make([]*quiz.Question, 0, defaultCount)
-	for i := 0; i < defaultCount; i++ {
-		q, err := m.maker.CreateQuestion(ctx, quiz.ImageQuiz, defaultDifficulty, "")
-		if err != nil {
-			continue
+	// Generate outside the lock. A scheduled curated quiz wins; otherwise the
+	// questions are auto-generated for the period.
+	qs := m.curatedQuestions(ctx, p, key)
+	if len(qs) == 0 {
+		for i := 0; i < defaultCount; i++ {
+			q, err := m.maker.CreateQuestion(ctx, quiz.ImageQuiz, defaultDifficulty, "")
+			if err != nil {
+				continue
+			}
+			qs = append(qs, q)
 		}
-		qs = append(qs, q)
 	}
 	if len(qs) == 0 {
 		return "", nil, errors.New("could not prepare challenge questions")
@@ -103,6 +123,31 @@ func (m *Manager) Questions(ctx context.Context, p Period) (string, []*quiz.Ques
 	}
 	m.cache[cacheKey] = qs
 	return key, qs, nil
+}
+
+// curatedQuestions returns the questions of the curated quiz scheduled for this
+// period, or nil when none is scheduled.
+func (m *Manager) curatedQuestions(ctx context.Context, p Period, key string) []*quiz.Question {
+	if m.curated == nil {
+		return nil
+	}
+	quizID, ok, err := m.curated.Scheduled(ctx, string(p), key)
+	if err != nil || !ok {
+		return nil
+	}
+	species, err := m.curated.QuizSpecies(ctx, quizID)
+	if err != nil {
+		return nil
+	}
+	qs := make([]*quiz.Question, 0, len(species))
+	for _, sp := range species {
+		q, err := m.maker.CreateQuestionFor(ctx, quiz.ImageQuiz, defaultDifficulty, sp)
+		if err != nil {
+			continue
+		}
+		qs = append(qs, q)
+	}
+	return qs
 }
 
 // Bind records that a quiz session belongs to a challenge.

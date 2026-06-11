@@ -63,6 +63,20 @@ CREATE TABLE IF NOT EXISTS challenge_scores (
 	PRIMARY KEY (period, period_key, player_id)
 );
 
+CREATE TABLE IF NOT EXISTS curated_quizzes (
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
+	species    TEXT NOT NULL DEFAULT '[]',
+	created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS challenge_schedule (
+	period     TEXT NOT NULL,
+	period_key TEXT NOT NULL,
+	quiz_id    TEXT NOT NULL,
+	PRIMARY KEY (period, period_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_challenge ON challenge_scores(period, period_key, score DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON quiz_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_players_xp ON players(total_xp DESC);

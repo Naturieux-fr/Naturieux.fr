@@ -10,9 +10,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/storage"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/application/challenge"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
 
@@ -46,12 +51,14 @@ type RoomStats interface {
 // AdminHandler serves the back-office API. Photo management is only available
 // when the species source is TAXREF (photos is non-nil).
 type AdminHandler struct {
-	auth    AdminAuth
-	photos  *taxref.Repository     // nil when the species source has no managed photos
-	storage MediaStore             // nil when uploads are not configured
-	inviter Inviter                // nil when account invites are unavailable
-	players ports.PlayerAdminStore // nil when player admin is unavailable
-	rooms   RoomStats              // nil when room stats are unavailable
+	auth       AdminAuth
+	photos     *taxref.Repository        // nil when the species source has no managed photos
+	storage    MediaStore                // nil when uploads are not configured
+	inviter    Inviter                   // nil when account invites are unavailable
+	players    ports.PlayerAdminStore    // nil when player admin is unavailable
+	rooms      RoomStats                 // nil when room stats are unavailable
+	curated    *sqlite.CuratedRepository // nil when curated quizzes are unavailable
+	challenges *challenge.Manager        // nil when challenges are unavailable
 }
 
 // NewAdminHandler creates the admin API handler. photos, store and inviter may
@@ -64,6 +71,12 @@ func NewAdminHandler(auth AdminAuth, photos *taxref.Repository, store MediaStore
 func (h *AdminHandler) SetAdminData(players ports.PlayerAdminStore, rooms RoomStats) {
 	h.players = players
 	h.rooms = rooms
+}
+
+// SetCuratedData wires the curated-quiz store and the challenge scheduler.
+func (h *AdminHandler) SetCuratedData(curated *sqlite.CuratedRepository, challenges *challenge.Manager) {
+	h.curated = curated
+	h.challenges = challenges
 }
 
 // RegisterRoutes wires the admin endpoints onto the mux.
@@ -80,6 +93,10 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/stats", h.requireAuth(h.handleStats))
 	mux.HandleFunc("GET /api/v1/admin/players", h.requireAuth(h.handleListPlayers))
 	mux.HandleFunc("GET /api/v1/admin/coverage", h.requireAuth(h.handleCoverage))
+	mux.HandleFunc("GET /api/v1/admin/quizzes", h.requireAuth(h.handleListQuizzes))
+	mux.HandleFunc("POST /api/v1/admin/quizzes", h.requireAuth(h.handleCreateQuiz))
+	mux.HandleFunc("DELETE /api/v1/admin/quizzes/{id}", h.requireAuth(h.handleDeleteQuiz))
+	mux.HandleFunc("POST /api/v1/admin/challenge/schedule", h.requireAuth(h.handleScheduleChallenge))
 	mux.HandleFunc("DELETE /api/v1/admin/players/{id}", h.requireAuth(h.handleDeletePlayer))
 	mux.HandleFunc("POST /api/v1/admin/players/{id}/role", h.requireAuth(h.handleSetPlayerRole))
 }
@@ -111,6 +128,92 @@ func (h *AdminHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeSuccess(w, out)
+}
+
+// handleListQuizzes returns the curated quizzes.
+func (h *AdminHandler) handleListQuizzes(w http.ResponseWriter, r *http.Request) {
+	if h.curated == nil {
+		writeError(w, http.StatusServiceUnavailable, "curated quizzes require the TAXREF species source")
+		return
+	}
+	list, err := h.curated.ListQuizzes(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"quizzes": list})
+}
+
+// handleCreateQuiz stores a curated quiz (a named list of cd_noms).
+func (h *AdminHandler) handleCreateQuiz(w http.ResponseWriter, r *http.Request) {
+	if h.curated == nil {
+		writeError(w, http.StatusServiceUnavailable, "curated quizzes require the TAXREF species source")
+		return
+	}
+	var req struct {
+		Name    string `json:"name"`
+		Species []int  `json:"species"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" || len(req.Species) == 0 {
+		writeError(w, http.StatusBadRequest, "name and at least one species are required")
+		return
+	}
+	id := uuid.New().String()
+	if err := h.curated.CreateQuiz(r.Context(), id, strings.TrimSpace(req.Name), req.Species, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"id": id})
+}
+
+// handleDeleteQuiz removes a curated quiz.
+func (h *AdminHandler) handleDeleteQuiz(w http.ResponseWriter, r *http.Request) {
+	if h.curated == nil {
+		writeError(w, http.StatusServiceUnavailable, "curated quizzes unavailable")
+		return
+	}
+	err := h.curated.DeleteQuiz(r.Context(), r.PathValue("id"))
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "quiz not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"message": "deleted"})
+}
+
+// handleScheduleChallenge sets a curated quiz as the current daily/weekly défi.
+func (h *AdminHandler) handleScheduleChallenge(w http.ResponseWriter, r *http.Request) {
+	if h.curated == nil || h.challenges == nil {
+		writeError(w, http.StatusServiceUnavailable, "challenges unavailable")
+		return
+	}
+	var req struct {
+		Period string `json:"period"`
+		QuizID string `json:"quiz_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	period := challenge.Period(req.Period)
+	if !period.IsValid() {
+		writeError(w, http.StatusBadRequest, "invalid period")
+		return
+	}
+	key := h.challenges.Key(period)
+	if err := h.curated.Schedule(r.Context(), string(period), key, req.QuizID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.challenges.Invalidate(period, key) // next player gets the curated set
+	writeSuccess(w, map[string]string{"period": string(period), "key": key})
 }
 
 // handleCoverage returns the photo coverage per taxonomic group.

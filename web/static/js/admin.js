@@ -17,6 +17,9 @@ function adminApp() {
         players: [],
         coverage: [],
         invites: [],
+        quizzes: [],
+        newQuiz: { name: '', species: [] },
+        quizSearch: { query: '', results: [] },
 
         init() {
             this.token = localStorage.getItem('naturieux_admin_token') || '';
@@ -44,6 +47,44 @@ function adminApp() {
             if (!confirm(`Supprimer le compte « ${name} » ?`)) return;
             try { await this.api(`/admin/players/${id}`, 'DELETE'); await this.loadPlayers(); await this.loadStats(); }
             catch (e) { this.error = e.message; }
+        },
+
+        // ----- Curated quizzes & challenge scheduling -----
+        async loadQuizzes() {
+            try { this.quizzes = (await this.api('/admin/quizzes', 'GET')).quizzes || []; }
+            catch (e) { this.error = e.message; }
+        },
+        async searchForQuiz() {
+            if (!this.quizSearch.query.trim()) return;
+            try { this.quizSearch.results = (await this.api(`/admin/taxa?q=${encodeURIComponent(this.quizSearch.query)}`, 'GET')).taxa || []; }
+            catch (e) { this.error = e.message; }
+        },
+        addToQuiz(t) {
+            if (!this.newQuiz.species.some(s => s.cd_nom === t.cd_nom)) {
+                this.newQuiz.species.push({ cd_nom: t.cd_nom, scientific_name: t.scientific_name });
+            }
+        },
+        removeFromQuiz(cd) { this.newQuiz.species = this.newQuiz.species.filter(s => s.cd_nom !== cd); },
+        async createQuiz() {
+            if (!this.newQuiz.name.trim() || !this.newQuiz.species.length) { this.error = 'Nom et au moins une espèce requis'; return; }
+            try {
+                await this.api('/admin/quizzes', 'POST', { name: this.newQuiz.name, species: this.newQuiz.species.map(s => s.cd_nom) });
+                this.newQuiz = { name: '', species: [] };
+                this.quizSearch = { query: '', results: [] };
+                await this.loadQuizzes();
+            } catch (e) { this.error = e.message; }
+        },
+        async deleteQuiz(id, name) {
+            if (!confirm(`Supprimer le quiz « ${name} » ?`)) return;
+            try { await this.api(`/admin/quizzes/${id}`, 'DELETE'); await this.loadQuizzes(); }
+            catch (e) { this.error = e.message; }
+        },
+        async scheduleChallenge(quizId, period) {
+            try {
+                const d = await this.api('/admin/challenge/schedule', 'POST', { period, quiz_id: quizId });
+                this.error = '';
+                alert(`Programmé comme ${period === 'weekly' ? 'défi de la semaine' : 'défi du jour'} (${d.key}).`);
+            } catch (e) { this.error = e.message; }
         },
 
         // Generate a player invitation link to share.

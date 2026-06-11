@@ -48,8 +48,53 @@
                 <button :class="{ active: tab==='dashboard' }" @click="tab='dashboard'">Tableau de bord</button>
                 <button :class="{ active: tab==='players' }" @click="tab='players'; loadPlayers()">Joueurs</button>
                 <button :class="{ active: tab==='invites' }" @click="tab='invites'; loadInvites()">Invitations</button>
+                <button :class="{ active: tab==='quizzes' }" @click="tab='quizzes'; loadQuizzes()">Quiz &amp; défis</button>
                 <button :class="{ active: tab==='species' }" @click="tab='species'">Espèces &amp; photos</button>
             </nav>
+
+            <!-- Quiz curés & défis -->
+            <article class="plate reveal" style="--d:1" x-show="tab==='quizzes'">
+                <span class="plate-no">✶</span>
+                <h2 class="plate-title">Composer un quiz</h2>
+                <p class="plate-lead">Sélectionnez des espèces ; programmez ensuite ce quiz comme défi du jour ou de la semaine.</p>
+                <input type="text" class="ink-field block" x-model="newQuiz.name" placeholder="Nom du quiz (ex. Rapaces de France)">
+                <div class="field-row">
+                    <input type="text" class="ink-field" x-model="quizSearch.query"
+                           placeholder="Chercher une espèce à ajouter" @keyup.enter="searchForQuiz()">
+                    <button @click="searchForQuiz()" class="btn btn-quiet">Chercher</button>
+                </div>
+                <ul class="find-list" x-show="quizSearch.results.length">
+                    <template x-for="t in quizSearch.results" :key="t.cd_nom">
+                        <li class="find-item" @click="addToQuiz(t)">
+                            <span class="find-names"><em x-text="t.scientific_name"></em><span x-text="t.vernacular_name"></span></span>
+                            <span class="find-cd">+ ajouter</span>
+                        </li>
+                    </template>
+                </ul>
+                <div class="player-rows" x-show="newQuiz.species.length" style="margin-top:12px">
+                    <template x-for="s in newQuiz.species" :key="s.cd_nom">
+                        <div class="player-row">
+                            <span class="pl-name" x-text="s.scientific_name"></span>
+                            <button class="btn-trash" @click="removeFromQuiz(s.cd_nom)" title="Retirer">✕</button>
+                        </div>
+                    </template>
+                </div>
+                <button @click="createQuiz()" class="btn btn-solid" style="margin-top:12px"
+                        x-text="`Créer le quiz (${newQuiz.species.length})`"></button>
+
+                <h3 class="adm-sub" x-show="quizzes.length">Quiz enregistrés</h3>
+                <div class="player-rows" x-show="quizzes.length">
+                    <template x-for="q in quizzes" :key="q.id">
+                        <div class="player-row">
+                            <span class="pl-name" x-text="q.name"></span>
+                            <span class="pl-stat" x-text="`${(q.species||[]).length} espèces`"></span>
+                            <button class="btn-mini" @click="scheduleChallenge(q.id,'daily')">Défi du jour</button>
+                            <button class="btn-mini" @click="scheduleChallenge(q.id,'weekly')">Défi semaine</button>
+                            <button class="btn-trash" @click="deleteQuiz(q.id, q.name)" title="Supprimer">✕</button>
+                        </div>
+                    </template>
+                </div>
+            </article>
 
             <!-- Tableau de bord -->
             <article class="plate reveal" style="--d:1" x-show="tab==='dashboard'">
@@ -200,6 +245,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.4"></script>
+    <script src="/static/js/admin.js?v=2.5"></script>
 </body>
 </html>

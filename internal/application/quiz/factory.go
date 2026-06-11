@@ -20,6 +20,8 @@ type QuestionFactory interface {
 	// restricted to taxonFilter (a category); an empty taxonFilter falls back
 	// to the factory's default.
 	CreateQuestion(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, taxonFilter string) (*quiz.Question, error)
+	// CreateQuestionFor builds a question for a specific species (curated quizzes).
+	CreateQuestionFor(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, speciesID int) (*quiz.Question, error)
 }
 
 // questionFactory implements QuestionFactory.
@@ -64,8 +66,6 @@ func (f *questionFactory) CreateQuestion(
 	difficulty quiz.Difficulty,
 	taxonFilter string,
 ) (*quiz.Question, error) {
-	config := quiz.DefaultDifficultyConfigs()[difficulty]
-
 	// The per-session category takes precedence over the factory default.
 	taxon := taxonFilter
 	if taxon == "" {
@@ -95,50 +95,59 @@ func (f *questionFactory) CreateQuestion(
 	if !correct.HasPhotos() {
 		return nil, errors.New("correct species has no photos")
 	}
+	return f.buildQuestion(ctx, quizType, difficulty, correct)
+}
 
-	// Get similar species for wrong answers
+// CreateQuestionFor builds a question whose correct answer is the given species
+// (used by curated challenges that pin a specific list of cd_noms).
+func (f *questionFactory) CreateQuestionFor(
+	ctx context.Context,
+	quizType quiz.QuizType,
+	difficulty quiz.Difficulty,
+	speciesID int,
+) (*quiz.Question, error) {
+	correct, err := f.speciesRepo.GetByID(ctx, speciesID)
+	if err != nil {
+		return nil, fmt.Errorf("getting species %d: %w", speciesID, err)
+	}
+	if !correct.HasPhotos() {
+		return nil, fmt.Errorf("species %d has no photos", speciesID)
+	}
+	return f.buildQuestion(ctx, quizType, difficulty, correct)
+}
+
+// buildQuestion assembles a question around a chosen correct species: it draws
+// same-group distractors, shuffles the choices, and attaches the media credit.
+func (f *questionFactory) buildQuestion(
+	ctx context.Context,
+	quizType quiz.QuizType,
+	difficulty quiz.Difficulty,
+	correct *species.Species,
+) (*quiz.Question, error) {
+	config := quiz.DefaultDifficultyConfigs()[difficulty]
+
 	wrongChoices, err := f.getWrongChoices(ctx, correct, config.ChoicesCount-1)
 	if err != nil {
 		return nil, fmt.Errorf("getting wrong choices: %w", err)
 	}
 
-	// Build choices
 	choices := make([]quiz.Choice, 0, config.ChoicesCount)
-	choices = append(choices, quiz.Choice{
-		Species:   correct,
-		IsCorrect: true,
-	})
+	choices = append(choices, quiz.Choice{Species: correct, IsCorrect: true})
 	for _, wrong := range wrongChoices {
-		choices = append(choices, quiz.Choice{
-			Species:   wrong,
-			IsCorrect: false,
-		})
+		choices = append(choices, quiz.Choice{Species: wrong, IsCorrect: false})
 	}
-
-	// Shuffle choices
 	rand.Shuffle(len(choices), func(i, j int) {
 		choices[i], choices[j] = choices[j], choices[i]
 	})
 
-	// Get media URL and its credit
 	mediaURL, mediaPhoto := f.selectMedia(correct, quizType)
-
-	question, err := quiz.NewQuestion(
-		uuid.New().String(),
-		quizType,
-		difficulty,
-		correct,
-		choices,
-		mediaURL,
-	)
+	question, err := quiz.NewQuestion(uuid.New().String(), quizType, difficulty, correct, choices, mediaURL)
 	if err != nil {
 		return nil, err
 	}
-
 	if mediaPhoto != nil {
 		question.SetMediaCredit(mediaPhoto.Attribution, mediaPhoto.LicenseCode)
 	}
-
 	return question, nil
 }
 

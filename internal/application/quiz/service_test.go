@@ -94,6 +94,10 @@ func (m *mockQuestionFactory) CreateQuestion(ctx context.Context, quizType quiz.
 	return q, nil
 }
 
+func (m *mockQuestionFactory) CreateQuestionFor(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, speciesID int) (*quiz.Question, error) {
+	return m.CreateQuestion(ctx, quizType, difficulty, "")
+}
+
 // mockEventPublisher for testing
 type mockEventPublisher struct {
 	sessionCompletedCount    int

@@ -124,9 +124,12 @@ func main() {
 	roomManager := room.NewManager(questionFactory)
 	adminHandler.SetAdminData(playerRepo, roomManager)
 
-	// Daily/weekly challenges (shared question set + dedicated leaderboard)
-	challengeManager := challenge.NewManager(questionFactory)
+	// Daily/weekly challenges (shared question set + dedicated leaderboard);
+	// admin-curated quizzes can be scheduled as the défi.
+	curatedRepo := sqlite.NewCuratedRepository(db)
+	challengeManager := challenge.NewManager(questionFactory, curatedRepo)
 	challengeHandler := httphandler.NewChallengeHandler(challengeManager, quizService, sqlite.NewChallengeRepository(db), playerRepo)
+	adminHandler.SetCuratedData(curatedRepo, challengeManager)
 	go reapRooms(backgroundCtx, roomManager)
 	roomHandler := httphandler.NewRoomHandler(roomManager, handler)
 
