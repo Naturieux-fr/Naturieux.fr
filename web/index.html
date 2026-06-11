@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3.4">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.5">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -187,6 +187,7 @@
                         <button @click="openChallenge('daily')" class="btn btn-quiet">⚡ Défi du jour</button>
                         <button @click="openChallenge('weekly')" class="btn btn-quiet">📅 Défi de la semaine</button>
                         <button @click="openMulti()" class="btn btn-quiet">⚔ Duel entre naturalistes</button>
+                        <button @click="openLocate()" class="btn btn-quiet">📍 Où est l'espèce ?</button>
                         <button @click="openLibrary()" class="btn btn-quiet">📖 Bibliothèque</button>
                         <button x-show="canWrite" @click="openEditor()" class="btn btn-quiet">✍ Rédaction</button>
                         <button @click="openAchievements()" class="btn btn-quiet">Cabinet des hauts faits</button>
@@ -451,6 +452,53 @@
             </article>
         </section>
 
+        <!-- ============ OÙ EST L'ESPÈCE ? ============ -->
+        <section x-show="screen === 'locate'" x-transition.opacity class="screen report">
+            <article class="plate report-plate reveal" style="--d:0">
+                <span class="plate-no">Repérage</span>
+                <h2 class="report-title">Où est l'espèce ?</h2>
+
+                <template x-if="locate.empty">
+                    <div>
+                        <p class="plate-lead">Aucune photo annotée pour l'instant. Un conservateur peut définir des zones d'espèces depuis le cabinet d'administration.</p>
+                        <div class="plate-actions"><button @click="goHome()" class="btn btn-solid btn-lg">Retour au carnet</button></div>
+                    </div>
+                </template>
+
+                <template x-if="!locate.empty">
+                    <div>
+                        <p class="locate-prompt">Trouve : <strong x-text="locate.target"></strong></p>
+
+                        <div class="locate-stage" @click="locateClick($event)" :class="{ done: locate.answered }">
+                            <img :src="locate.imageUrl" alt="" draggable="false" x-show="locate.imageUrl">
+                            <!-- revealed zones after answering -->
+                            <template x-for="(z,i) in locate.zones" :key="i">
+                                <div class="lz" :class="{ target: isTargetZone(z) }"
+                                     :style="`left:${z.x*100}%;top:${z.y*100}%;width:${z.w*100}%;height:${z.h*100}%`">
+                                    <span x-text="z.name"></span>
+                                </div>
+                            </template>
+                            <!-- click marker -->
+                            <div class="locate-mark" x-show="locate.click"
+                                 :class="{ ok: locate.correct, ko: locate.answered && !locate.correct }"
+                                 :style="locate.click ? `left:${locate.click.x*100}%;top:${locate.click.y*100}%` : ''"
+                                 x-text="locate.answered ? (locate.correct ? '✓' : '✗') : ''"></div>
+                        </div>
+
+                        <p class="locate-feedback" x-show="locate.answered"
+                           :class="{ good: locate.correct, bad: !locate.correct }"
+                           x-text="locate.correct ? 'Exact !' : `Raté — voilà où était ${locate.target}.`"></p>
+                        <p class="locate-hint" x-show="!locate.answered && !locate.loading">Clique sur la zone de la photo où se trouve cette espèce.</p>
+
+                        <div class="plate-actions">
+                            <button x-show="locate.answered" @click="openLocate()" class="btn btn-solid btn-lg">Photo suivante</button>
+                            <button @click="goHome()" class="btn btn-quiet">Retour au carnet</button>
+                        </div>
+                    </div>
+                </template>
+            </article>
+        </section>
+
         <!-- ============ QUIZ ============ -->
         <section x-show="screen === 'quiz'" x-transition.opacity class="screen quiz">
             <header class="field-bar">
@@ -660,6 +708,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.4"></script>
+    <script src="/static/js/app.js?v=3.5"></script>
 </body>
 </html>

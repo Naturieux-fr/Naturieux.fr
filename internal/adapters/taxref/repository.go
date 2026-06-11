@@ -353,6 +353,85 @@ type PhotoRecord struct {
 	Zones       json.RawMessage `json:"zones"`
 }
 
+// SpeciesZone is a species-tagged region of a photo (for the "locate" game).
+type SpeciesZone struct {
+	CdNom int     `json:"cd_nom"`
+	Name  string  `json:"name"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	W     float64 `json:"w"`
+	H     float64 `json:"h"`
+}
+
+// ZonedPhoto is a photo carrying at least one species zone.
+type ZonedPhoto struct {
+	PhotoID int           `json:"photo_id"`
+	URL     string        `json:"-"`
+	Species []SpeciesZone `json:"species"`
+}
+
+// PhotosWithSpeciesZones returns photos annotated with one or more species
+// zones, in random order, capped at limit.
+func (r *Repository) PhotosWithSpeciesZones(ctx context.Context, limit int) ([]ZonedPhoto, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, url, zones FROM taxref_photos
+		WHERE zones != '{}' AND zones != '' ORDER BY RANDOM() LIMIT ?`, limit*4)
+	if err != nil {
+		return nil, fmt.Errorf("taxref zoned photos: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]ZonedPhoto, 0, limit)
+	for rows.Next() && len(out) < limit {
+		var id int
+		var url, zones string
+		if err := rows.Scan(&id, &url, &zones); err != nil {
+			return nil, fmt.Errorf("scanning zoned photo: %w", err)
+		}
+		var z struct {
+			Species []SpeciesZone `json:"species"`
+		}
+		if err := json.Unmarshal([]byte(zones), &z); err != nil || len(z.Species) == 0 {
+			continue
+		}
+		out = append(out, ZonedPhoto{PhotoID: id, URL: url, Species: z.Species})
+	}
+	return out, rows.Err()
+}
+
+// PhotoURLByID returns the stored URL of a photo.
+func (r *Repository) PhotoURLByID(ctx context.Context, id int) (string, error) {
+	var url string
+	err := r.db.QueryRowContext(ctx, `SELECT url FROM taxref_photos WHERE id = ?`, id).Scan(&url)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ports.ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("taxref photo url: %w", err)
+	}
+	return url, nil
+}
+
+// PhotoSpeciesZones returns the species zones stored on a photo.
+func (r *Repository) PhotoSpeciesZones(ctx context.Context, id int) ([]SpeciesZone, error) {
+	var zones string
+	err := r.db.QueryRowContext(ctx, `SELECT zones FROM taxref_photos WHERE id = ?`, id).Scan(&zones)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ports.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("taxref photo zones: %w", err)
+	}
+	var z struct {
+		Species []SpeciesZone `json:"species"`
+	}
+	_ = json.Unmarshal([]byte(zones), &z)
+	return z.Species, nil
+}
+
 // SetPhotoZones stores the annotation zones (zoom + per-species regions) for a
 // photo. zones is a JSON object; an empty value clears them.
 func (r *Repository) SetPhotoZones(ctx context.Context, photoID int, zones string) error {

@@ -60,6 +60,9 @@ function quizApp() {
         articleEditor: { id: '', title: '', body: '', species: [], published: true },
         articleSearch: { query: '', results: [] },
 
+        // "Où est l'espèce ?" exercise
+        locate: { photoId: null, imageUrl: '', target: '', targetCd: null, speciesHere: [], answered: false, correct: false, zones: [], click: null, loading: false, empty: false },
+
         // Tiered grades: a title per category, earned by correct answers.
         gradeTiers: [100, 500, 2000],
         gradeDefs: [
@@ -772,6 +775,38 @@ function quizApp() {
             try { await this.api(`/articles/${id}`, 'DELETE'); await this.openLibrary(); this.screen = 'editor'; }
             catch (e) { this.error = e.message; }
         },
+
+        // ---------- « Où est l'espèce ? » ----------
+
+        async openLocate() {
+            this.error = '';
+            this.locate = { photoId: null, imageUrl: '', target: '', targetCd: null, speciesHere: [], answered: false, correct: false, zones: [], click: null, loading: true, empty: false };
+            this.screen = 'locate';
+            try {
+                const d = await this.api('/locate/next', 'GET');
+                this.locate = {
+                    photoId: d.photo_id, imageUrl: d.image_url, target: d.target_name, targetCd: d.target_cd,
+                    speciesHere: d.species_here || [], answered: false, correct: false, zones: [], click: null, loading: false, empty: false
+                };
+            } catch (e) {
+                this.locate.loading = false;
+                this.locate.empty = true; // no annotated photos yet (or error)
+            }
+        },
+        async locateClick(e) {
+            if (this.locate.answered || this.locate.loading) return;
+            const r = e.currentTarget.getBoundingClientRect();
+            const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+            this.locate.click = { x, y };
+            try {
+                const d = await this.api('/locate/answer', 'POST', { photo_id: this.locate.photoId, cd_nom: this.locate.targetCd, x, y });
+                this.locate.answered = true;
+                this.locate.correct = d.correct;
+                this.locate.zones = d.zones || [];
+                if (d.correct) this.pushToast('🎯', 'Bien vu !', `${this.locate.target}, c'était bien là.`);
+            } catch (err) { this.error = err.message; }
+        },
+        isTargetZone(z) { return z.cd_nom === this.locate.targetCd; },
 
         // ---------- Défis du jour / de la semaine ----------
 

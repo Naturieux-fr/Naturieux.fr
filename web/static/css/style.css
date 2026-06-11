@@ -588,3 +588,31 @@ textarea.ink-field { resize: vertical; font-family: inherit; line-height: 1.6; }
     .btn:hover, .grade-chip:hover, .taxa-chip:hover, .count-chip:hover,
     .key-entry:hover:not(.locked) { transform: none; }
 }
+
+/* ============================ OÙ EST L'ESPÈCE ? ============================ */
+.locate-prompt { font-family: var(--serif); font-size: 1.15rem; margin: 6px 0 14px; color: var(--ink-1); }
+.locate-prompt strong { color: var(--forest-2); }
+.locate-stage {
+    position: relative; width: 100%; line-height: 0; cursor: crosshair;
+    border: 1px solid var(--hair); background: #000; overflow: hidden; user-select: none;
+}
+.locate-stage.done { cursor: default; }
+.locate-stage img { width: 100%; height: auto; display: block; pointer-events: none; }
+.lz { position: absolute; box-sizing: border-box; border: 2px solid rgba(243,234,216,.55); background: rgba(40,36,28,.28); pointer-events: none; }
+.lz.target { border-color: #6fae72; background: rgba(63,125,82,.28); }
+.lz span {
+    position: absolute; top: -2px; left: -1px; font-size: .68rem; padding: 1px 6px; line-height: 1.4;
+    background: rgba(28,24,18,.8); color: var(--paper-2); white-space: nowrap;
+}
+.lz.target span { background: #3f7d52; color: #fff; }
+.locate-mark {
+    position: absolute; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff;
+    border: 2px solid #fff; pointer-events: none;
+}
+.locate-mark.ok { background: #3f7d52; }
+.locate-mark.ko { background: var(--rust, #a4471f); }
+.locate-feedback { margin-top: 12px; font-family: var(--serif); font-size: 1.05rem; }
+.locate-feedback.good { color: var(--forest-2); }
+.locate-feedback.bad { color: var(--rust, #a4471f); }
+.locate-hint { margin-top: 10px; color: var(--ink-3); font-style: italic; }

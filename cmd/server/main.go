@@ -138,6 +138,12 @@ func main() {
 	// Learning library: articles authored by rédacteurs, read by everyone.
 	articleHandler := httphandler.NewArticleHandler(sqlite.NewArticleRepository(db), accountService)
 
+	// "Où est l'espèce ?" exercise, backed by photo species-zones (TAXREF only).
+	var locateHandler *httphandler.LocateHandler
+	if taxrefRepo != nil {
+		locateHandler = httphandler.NewLocateHandler(taxrefRepo, handler)
+	}
+
 	// Create HTTP server
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -146,6 +152,9 @@ func main() {
 	accountHandler.RegisterRoutes(mux)
 	challengeHandler.RegisterRoutes(mux)
 	articleHandler.RegisterRoutes(mux)
+	if locateHandler != nil {
+		locateHandler.RegisterRoutes(mux)
+	}
 
 	// Serve the admin page
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
