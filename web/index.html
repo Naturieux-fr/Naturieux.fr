@@ -312,6 +312,8 @@
                         </div>
                         <p class="plate-lead" style="font-size:.82rem">Le reste suit vos réglages d'accueil (catégorie, niveau, type d'épreuve, réponse).</p>
 
+                        <label class="check-row"><input type="checkbox" x-model="roomPublic"> Salon public (visible de tous, sans code)</label>
+
                         <div class="duel-actions">
                             <button @click="createRoom()" class="btn btn-solid btn-lg" :disabled="loading">Créer un salon</button>
                             <div class="duel-join">
@@ -320,6 +322,23 @@
                                 <button @click="joinRoom()" class="btn btn-quiet" :disabled="loading">Rejoindre</button>
                             </div>
                         </div>
+
+                        <div class="public-rooms" x-show="publicRooms.length">
+                            <h3 class="adm-sub">Salons publics ouverts</h3>
+                            <ul class="article-list">
+                                <template x-for="pr in publicRooms" :key="pr.code">
+                                    <li class="article-item">
+                                        <span class="article-title"><span x-text="pr.host"></span> · <span x-text="pr.code"></span></span>
+                                        <span class="article-meta">
+                                            <span x-text="`${pr.players} joueur${pr.players>1?'s':''} · ${pr.mode === 'elimination' ? 'élimination' : 'classique'}`"></span>
+                                            <button class="btn-mini" @click="joinCode = pr.code; joinRoom()">Rejoindre</button>
+                                            <button class="btn-mini" @click="spectate(pr.code)">👁 Regarder</button>
+                                        </span>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                        <button @click="loadPublicRooms()" class="btn btn-quiet" style="margin-top:10px">Rafraîchir les salons</button>
                         <button @click="goHome()" class="btn btn-quiet" style="margin-top:18px">← Retour</button>
                     </div>
                 </template>
@@ -344,6 +363,28 @@
                         </div>
                     </div>
                 </template>
+            </article>
+        </section>
+
+        <!-- ============ MULTIJOUEUR — SPECTATEUR ============ -->
+        <section x-show="screen === 'mp-spectate'" x-transition.opacity class="screen mp">
+            <article class="plate reveal" style="--d:0">
+                <span class="plate-no">👁</span>
+                <h2 class="plate-title">Spectateur · <span class="room-code" x-text="room.code"></span></h2>
+                <p class="plate-lead" x-text="room.status === 'lobby' ? 'En attente du lancement…' : (room.status === 'playing' ? `Manche ${room.round + 1} / ${room.total}` : 'Partie terminée')"></p>
+                <div class="live-board">
+                    <template x-for="p in room.players" :key="p.id">
+                        <div class="live-pill" :class="{ lead: p.rank === 1, out: p.eliminated, ready: p.has_answered && !p.eliminated }">
+                            <span class="live-rank" x-text="p.eliminated ? '✗' : (p.has_answered ? '✓' : p.rank)"></span>
+                            <span class="live-name" x-text="p.name"></span>
+                            <span class="live-prog" x-text="p.eliminated ? 'éliminé' : (p.has_answered ? 'a répondu' : 'réfléchit…')"></span>
+                            <span class="live-score" x-text="p.score"></span>
+                        </div>
+                    </template>
+                </div>
+                <div class="plate-actions">
+                    <button @click="leaveRoom()" class="btn btn-solid btn-lg">Quitter</button>
+                </div>
             </article>
         </section>
 
@@ -770,7 +811,7 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=4.1"></script>
+    <script src="/static/js/app.js?v=4.2"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

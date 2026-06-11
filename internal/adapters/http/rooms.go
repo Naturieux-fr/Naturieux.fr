@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -28,6 +29,7 @@ func NewRoomHandler(rooms *room.Manager, images *Handler) *RoomHandler {
 // RegisterRoutes wires the room endpoints.
 func (h *RoomHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/rooms", h.handleCreate)
+	mux.HandleFunc("GET /api/v1/rooms", h.handleListOpen)
 	mux.HandleFunc("POST /api/v1/rooms/{code}/join", h.handleJoin)
 	mux.HandleFunc("POST /api/v1/rooms/{code}/start", h.handleStart)
 	mux.HandleFunc("GET /api/v1/rooms/{code}", h.handleState)
@@ -76,10 +78,20 @@ func (h *RoomHandler) handleSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// Keep-alive: ping periodically so mobile/proxied connections are not
+	// dropped during quiet phases (e.g. the lobby or between rounds).
+	ping := time.NewTicker(25 * time.Second)
+	defer ping.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ping.C:
+			if c.Ping(ctx) != nil {
+				return
+			}
 		case st, ok := <-updates:
 			if !ok {
 				return
@@ -101,6 +113,7 @@ func (h *RoomHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Count       int    `json:"count"`
 		Mode        string `json:"mode"`
 		AnswerMode  string `json:"answer_mode"`
+		Public      bool   `json:"public"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -113,12 +126,18 @@ func (h *RoomHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Count:       req.Count,
 		Mode:        room.Mode(orDefault(req.Mode, "classic")),
 		AnswerMode:  orDefault(req.AnswerMode, "choices"),
+		Public:      req.Public,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeSuccess(w, map[string]string{"code": rm.Code(), "token": token})
+}
+
+// handleListOpen lists the public rooms waiting for players.
+func (h *RoomHandler) handleListOpen(w http.ResponseWriter, r *http.Request) {
+	writeSuccess(w, map[string]interface{}{"rooms": h.rooms.ListOpen()})
 }
 
 func (h *RoomHandler) handleJoin(w http.ResponseWriter, r *http.Request) {

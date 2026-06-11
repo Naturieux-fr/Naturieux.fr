@@ -53,6 +53,17 @@ type Settings struct {
 	Count       int
 	Mode        Mode
 	AnswerMode  string // "choices" or "free" (rendered client-side)
+	Public      bool   // listed publicly so anyone can join without a code
+}
+
+// RoomSummary is a public room's listing entry.
+type RoomSummary struct {
+	Code       string        `json:"code"`
+	Host       string        `json:"host"`
+	Players    int           `json:"players"`
+	Mode       Mode          `json:"mode"`
+	QuizType   quiz.QuizType `json:"quiz_type"`
+	AnswerMode string        `json:"answer_mode"`
 }
 
 // QuestionMaker produces quiz questions; satisfied by the quiz factory.
@@ -161,6 +172,29 @@ func (m *Manager) Create(hostID, hostName string, s Settings) (*Room, string, er
 	}
 	m.rooms[code] = r
 	return r, token, nil
+}
+
+// ListOpen returns the public rooms still in the lobby (joinable by anyone),
+// most recent first.
+func (m *Manager) ListOpen() []RoomSummary {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []RoomSummary{}
+	for _, r := range m.rooms {
+		r.mu.Lock()
+		if r.settings.Public && r.status == Lobby {
+			host := ""
+			if len(r.players) > 0 {
+				host = r.players[0].name
+			}
+			out = append(out, RoomSummary{
+				Code: r.code, Host: host, Players: len(r.players),
+				Mode: r.settings.Mode, QuizType: r.settings.QuizType, AnswerMode: r.settings.AnswerMode,
+			})
+		}
+		r.mu.Unlock()
+	}
+	return out
 }
 
 // Get returns a room by code.

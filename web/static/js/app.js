@@ -18,6 +18,9 @@ function quizApp() {
         roomToken: '',
         roomWaiting: false,
         roomSocket: null,
+        publicRooms: [],
+        roomPublic: false,
+        spectating: false,
         _wsRetry: null,
         // Défis du jour / de la semaine
         inChallenge: false,
@@ -968,8 +971,24 @@ function quizApp() {
             this.inRoom = false;
             this.roomDone = false;
             this.roomWaiting = false;
+            this.spectating = false;
             this.room = { code: '', status: '', players: [], total: 0, round: 0, hostId: '', mode: 'classic', answerMode: 'choices' };
             this.screen = 'mp-lobby';
+            this.loadPublicRooms();
+        },
+
+        async loadPublicRooms() {
+            try { this.publicRooms = (await this.api('/rooms', 'GET')).rooms || []; } catch (e) {}
+        },
+
+        // Watch a room without playing (read-only live scoreboard).
+        spectate(code) {
+            this.spectating = true;
+            this.inRoom = false;
+            this.roomToken = '';
+            this.room.code = code;
+            this.screen = 'mp-spectate';
+            this.startRoomPolling();
         },
 
         async createRoom() {
@@ -979,7 +998,8 @@ function quizApp() {
                     host_id: this.player.id, host_name: this.player.name,
                     difficulty: this.settings.difficulty, quiz_type: this.settings.epreuve,
                     answer_mode: this.settings.answerMode, mode: this.roomMode,
-                    taxon_filter: this.settings.taxon, count: this.settings.questionCount
+                    taxon_filter: this.settings.taxon, count: this.settings.questionCount,
+                    public: this.roomPublic
                 });
                 this.room.code = data.code;
                 this.roomToken = data.token;
@@ -1055,7 +1075,8 @@ function quizApp() {
         async pollRoom() {
             if (!this.room.code) return;
             try {
-                const data = await this.api(`/rooms/${this.room.code}?player_id=${this.player.id}`, 'GET');
+                const q = this.spectating ? '' : `?player_id=${this.player.id}`;
+                const data = await this.api(`/rooms/${this.room.code}${q}`, 'GET');
                 this.applyRoomState(data.room, data.your_question);
             } catch (e) { /* transient: keep the socket / next poll */ }
         },
@@ -1063,9 +1084,16 @@ function quizApp() {
         // Unified handler for a room snapshot from either transport.
         applyRoomState(state, yourQuestion) {
             if (!state) return;
-            const wasStatus = this.room.status;
             const prevRound = this.room.round || 0;
             this.applyRoom(state);
+
+            // Spectators only watch the live board; never enter the quiz.
+            if (this.spectating) {
+                if (this.room.status === 'finished' && this.screen !== 'mp-podium') {
+                    this.screen = 'mp-podium';
+                }
+                return;
+            }
 
             if (this.room.status === 'playing') {
                 if (!this.inRoom) {
@@ -1217,6 +1245,7 @@ function quizApp() {
             this.stopRoomPolling();
             this.clearRoomSession();
             this.inRoom = false;
+            this.spectating = false;
             this.roomDone = false;
             this.roomWaiting = false;
             this.showFeedback = false;
