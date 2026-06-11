@@ -1,0 +1,16 @@
+# Normalize line endings: LF in the repository for text files.
+* text=auto eol=lf
+*.go text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.svg text eol=lf
+*.yml text eol=lf
+*.sum text eol=lf
+*.mod text eol=lf
+# Binary
+*.png binary
+*.jpg binary
+*.zip binary
+*.exe binary
