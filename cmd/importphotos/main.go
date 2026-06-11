@@ -87,7 +87,7 @@ func main() {
 		}
 
 		path := filepath.Join(*dir, row.Photo)
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) // #nosec G304 -- operator-provided import directory (CLI)
 		if err != nil {
 			log.Printf("  ✗ fichier absent: %s", row.Photo)
 			missing++

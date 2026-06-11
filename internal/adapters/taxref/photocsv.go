@@ -18,7 +18,7 @@ type PhotoCSVRow struct {
 // ParsePhotoCSV reads a semicolon-separated mapping CSV with the header
 // "photo;groupe_taxonomique;nom_scientifique".
 func ParsePhotoCSV(path string) ([]PhotoCSVRow, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- operator-provided import file path (CLI)
 	if err != nil {
 		return nil, fmt.Errorf("opening CSV: %w", err)
 	}

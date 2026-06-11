@@ -21,7 +21,8 @@ type Local struct {
 
 // NewLocal creates a local storage rooted at dir, creating it if needed.
 func NewLocal(dir string) (*Local, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// dir comes from MEDIA_DIR (operator config), not user input.
+	if err := os.MkdirAll(dir, 0o750); err != nil { // #nosec G703
 		return nil, fmt.Errorf("creating media dir: %w", err)
 	}
 	return &Local{dir: dir}, nil
@@ -44,7 +45,7 @@ func (l *Local) Save(_ context.Context, contentType string, r io.Reader) (Saved,
 	name := uuid.New().String() + ext
 	path := filepath.Join(l.dir, name)
 
-	f, err := os.Create(path)
+	f, err := os.Create(path) // #nosec G304 -- name is a generated uuid, not user input
 	if err != nil {
 		return Saved{}, fmt.Errorf("creating file: %w", err)
 	}

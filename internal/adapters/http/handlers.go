@@ -707,14 +707,16 @@ func (h *Handler) streamImage(w http.ResponseWriter, r *http.Request, mediaURL s
 		return
 	}
 
-	// Remote (e.g. iNaturalist / S3): proxy the bytes server-side.
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, mediaURL, nil)
+	// Remote (e.g. iNaturalist / S3): proxy the bytes server-side. mediaURL is
+	// an owned/curated media URL (admin-added photos & sounds, or the configured
+	// species source), never an arbitrary user-supplied address.
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, mediaURL, nil) // #nosec G704
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	req.Header.Set("User-Agent", "Naturieux/1.0 (https://naturieux.fr)")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- see above: curated media only
 	if err != nil {
 		http.Error(w, "image unavailable", http.StatusBadGateway)
 		return

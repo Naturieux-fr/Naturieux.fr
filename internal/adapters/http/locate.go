@@ -27,7 +27,7 @@ func NewLocateHandler(photos *taxref.Repository, images *Handler) *LocateHandler
 		if n <= 0 {
 			return 0
 		}
-		return rand.Intn(n)
+		return rand.Intn(n) // #nosec G404 -- picking a quiz item, not security-sensitive
 	}}
 }
 
