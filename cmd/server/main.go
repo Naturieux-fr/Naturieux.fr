@@ -171,6 +171,17 @@ func main() {
 		http.ServeFile(w, r, "web/legal.html")
 	})
 
+	// PWA: web app manifest and service worker (served at root for full scope).
+	mux.HandleFunc("/manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/manifest+json")
+		http.ServeFile(w, r, "web/manifest.webmanifest")
+	})
+	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		w.Header().Set("Service-Worker-Allowed", "/")
+		http.ServeFile(w, r, "web/sw.js")
+	})
+
 	// Locally stored uploads are read by the quiz-image proxy (the raw /media
 	// path is not exposed to players; only the admin file server uses it).
 	if local, ok := mediaStore.(*storage.Local); ok {

@@ -1,0 +1,16 @@
+{
+  "name": "Naturieux — l'art de reconnaître les espèces",
+  "short_name": "Naturieux",
+  "description": "Quiz naturaliste : identifiez les espèces à l'image, à la silhouette, au détail ou au chant.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3ead8",
+  "theme_color": "#2f4a36",
+  "icons": [
+    { "src": "/static/img/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/static/img/mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
