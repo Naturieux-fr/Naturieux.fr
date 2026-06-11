@@ -55,7 +55,7 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Section apprentissage / articles** : rôle **rédacteur** (`writer`, promu depuis l'admin) écrivant des articles liés aux espèces ; **Bibliothèque** publique + **lien « En savoir plus »** sur la bonne réponse en quiz. *(fait)*
 - [x] **Zones sur les images (multi-espèces)** : éditeur glisser-tracer dans l'admin pour associer une espèce à une zone (X ici, Y là). *(fait)*
 - [x] **Zone de zoom (mode Détail)** : zone par photo utilisée pour le gros plan, à la place du recadrage aléatoire. *(fait)*
-- [ ] **Exploiter les zones espèces en jeu** : exercice « où est l'espèce X ? » (cliquer la bonne zone) — piste future maintenant que les zones existent.
+- [x] **Exploiter les zones espèces en jeu** : exercice « 📍 Où est l'espèce ? » (cliquer la bonne zone), validé côté serveur. *(fait)*
 
 ## P2 — Améliorations
 
@@ -70,14 +70,14 @@ l'**identité visuelle** (logo + favicon).
 ## P3 — Déploiement
 
 - [x] **Conteneurisation** : Dockerfile multi-stage + `docker-compose.yml` (+ profil `minio`).
-- [ ] **Hébergement naturieux.fr** : reverse proxy + **TLS/HTTPS**, `AUTH_SECRET` fixe, `PORT`, logs.
-- [ ] **Page mentions légales / confidentialité** : crédits iNaturalist + TAXREF, licences des médias, RGPD (comptes & mots de passe stockés).
+- [~] **Hébergement naturieux.fr** : outils prêts — reverse proxy **Caddy** (TLS auto), profil compose `tls`, en-têtes de sécurité, guide `05-mise-en-ligne.md`. Reste le déploiement effectif (géré par l'utilisateur sur son serveur).
+- [x] **Page mentions légales / confidentialité** : page `/legal` (RGPD, licences, crédits). *(champs `[à compléter]` à remplir avant ouverture)*
 - [ ] **Monitoring** : métriques basiques (parties/jour, taux d'erreur API).
 
 ## Dette technique
 
 - [x] Store de sessions hors du handler (service + repo SQLite).
 - [x] Repo joueurs en mémoire supprimé (SQLite).
-- [ ] **`.gitattributes`** : harmoniser les fins de ligne (warnings LF/CRLF sous Windows).
+- [x] **`.gitattributes`** : fins de ligne harmonisées (LF). *(fait)*
 - [ ] Couverture handlers HTTP : tester davantage les chemins succès avec service mocké.
 - [ ] `golangci-lint` local : ne tourne pas (binaire go1.24 < cible 1.25) ; la CI l'exécute en `latest`.
