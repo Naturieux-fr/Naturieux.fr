@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3.5">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.6">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -553,11 +553,17 @@
                     <span class="corner bl"></span><span class="corner br"></span>
                     <div class="mount-frame" :class="'mode-' + quizType">
                         <img :src="question.mediaUrl || null" alt="Spécimen à identifier"
-                             x-show="question.mediaUrl && !(quizType === 'flash' && flashHidden)"
+                             x-show="quizType !== 'sound' && question.mediaUrl && !(quizType === 'flash' && flashHidden)"
                              @load="onImageLoad()" @error="onImageError()"
                              @contextmenu.prevent @dragstart.prevent draggable="false"
                              :class="{ loaded: imageLoaded }"
                              :style="quizType === 'partial' ? partialStyle : ''">
+                        <div class="sound-player" x-show="quizType === 'sound'">
+                            <div class="sound-emblem" aria-hidden="true">♪</div>
+                            <p class="sound-hint">Écoute le chant puis identifie l'oiseau.</p>
+                            <audio :src="question.mediaUrl || null" controls autoplay preload="auto"
+                                   @loadeddata="onImageLoad()" @error="onImageError()" x-show="question.mediaUrl"></audio>
+                        </div>
                         <div class="flash-cover" x-show="quizType === 'flash' && flashHidden && imageLoaded">
                             <span>✦</span><p>De mémoire…</p>
                         </div>
@@ -569,7 +575,7 @@
                     <figcaption class="mount-caption" x-show="question.mediaAttribution" x-text="question.mediaAttribution"></figcaption>
                 </figure>
 
-                <p class="determine">Quelle est cette espèce ?</p>
+                <p class="determine" x-text="quizType === 'sound' ? 'Quel est ce chant ?' : 'Quelle est cette espèce ?'"></p>
 
                 <!-- Réponse à choix -->
                 <div class="key-list" x-show="activeAnswerMode === 'choices'">
@@ -712,6 +718,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=3.5"></script>
+    <script src="/static/js/app.js?v=3.6"></script>
 </body>
 </html>

@@ -176,7 +176,8 @@ function quizApp() {
             { id: 'image', name: 'Planche', desc: 'image entière' },
             { id: 'flash', name: 'Éclair', desc: 'un bref instant' },
             { id: 'silhouette', name: 'Silhouette', desc: 'forme sombre' },
-            { id: 'partial', name: 'Détail', desc: 'gros plan' }
+            { id: 'partial', name: 'Détail', desc: 'gros plan' },
+            { id: 'sound', name: 'Chant', desc: 'au son (oiseaux)' }
         ],
 
         answerModes: [

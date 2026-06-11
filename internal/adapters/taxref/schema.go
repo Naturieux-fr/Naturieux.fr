@@ -50,6 +50,18 @@ CREATE TABLE IF NOT EXISTS taxref_photos (
 
 CREATE INDEX IF NOT EXISTS idx_taxref_photos_cdnom ON taxref_photos(cd_nom);
 
+-- Locally owned recordings (bird songs, etc.) for the Sound quiz.
+CREATE TABLE IF NOT EXISTS taxref_sounds (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	cd_nom      INTEGER NOT NULL,
+	url         TEXT NOT NULL,
+	attribution TEXT NOT NULL DEFAULT '',
+	license     TEXT NOT NULL DEFAULT '',
+	FOREIGN KEY (cd_nom) REFERENCES taxref_species(cd_nom)
+);
+
+CREATE INDEX IF NOT EXISTS idx_taxref_sounds_cdnom ON taxref_sounds(cd_nom);
+
 -- Metadata (e.g. the imported TAXREF version).
 CREATE TABLE IF NOT EXISTS taxref_meta (
 	key   TEXT PRIMARY KEY,

@@ -88,6 +88,10 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/upload", h.requireAdmin(h.handleUploadPhoto))
 	mux.HandleFunc("DELETE /api/v1/admin/photos/{id}", h.requireAdmin(h.handleDeletePhoto))
 	mux.HandleFunc("POST /api/v1/admin/photos/{id}/zones", h.requireAdmin(h.handleSetPhotoZones))
+	mux.HandleFunc("GET /api/v1/admin/taxa/{cd_nom}/sounds", h.requireAdmin(h.handleListSounds))
+	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/sounds", h.requireAdmin(h.handleAddSound))
+	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/sound-upload", h.requireAdmin(h.handleUploadSound))
+	mux.HandleFunc("DELETE /api/v1/admin/sounds/{id}", h.requireAdmin(h.handleDeleteSound))
 	mux.HandleFunc("POST /api/v1/admin/invites", h.requireAuth(h.handleCreateInvite))
 	mux.HandleFunc("GET /api/v1/admin/invites", h.requireAuth(h.handleListInvites))
 	mux.HandleFunc("POST /api/v1/admin/invites/{token}/revoke", h.requireAuth(h.handleRevokeInvite))
@@ -582,6 +586,127 @@ func (h *AdminHandler) handleSetPhotoZones(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeSuccess(w, map[string]string{"message": "zones saved"})
+}
+
+// handleListSounds returns the owned recordings for a taxon.
+func (h *AdminHandler) handleListSounds(w http.ResponseWriter, r *http.Request) {
+	cdNom, ok := pathInt(w, r, "cd_nom")
+	if !ok {
+		return
+	}
+	sounds, err := h.photos.ListSounds(r.Context(), cdNom)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"sounds": sounds})
+}
+
+// handleAddSound records a recording referenced by an external URL.
+func (h *AdminHandler) handleAddSound(w http.ResponseWriter, r *http.Request) {
+	cdNom, ok := pathInt(w, r, "cd_nom")
+	if !ok {
+		return
+	}
+	var req struct {
+		URL         string `json:"url"`
+		Attribution string `json:"attribution"`
+		License     string `json:"license"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+	id, err := h.photos.AddSound(r.Context(), cdNom, req.URL, req.Attribution, req.License)
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "taxon not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"id": id})
+}
+
+// handleUploadSound accepts a multipart audio upload, stores the file and
+// records the recording for the taxon. Form fields: file, attribution, license.
+func (h *AdminHandler) handleUploadSound(w http.ResponseWriter, r *http.Request) {
+	if h.storage == nil {
+		writeError(w, http.StatusServiceUnavailable, "uploads are not configured")
+		return
+	}
+	cdNom, ok := pathInt(w, r, "cd_nom")
+	if !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+512)
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "a 'file' field is required")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+	contentType := http.DetectContentType(head[:n])
+	if _, err := storage.AudioExtensionFor(contentType); err != nil {
+		writeError(w, http.StatusUnsupportedMediaType, "only MP3, OGG, WAV or WebM audio is accepted")
+		return
+	}
+
+	body := io.MultiReader(bytes.NewReader(head[:n]), file)
+	saved, err := h.storage.Save(r.Context(), contentType, body)
+	if errors.Is(err, storage.ErrTooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, "file too large")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	id, err := h.photos.AddSound(r.Context(), cdNom, saved.URL, r.FormValue("attribution"), r.FormValue("license"))
+	if errors.Is(err, ports.ErrNotFound) {
+		_ = h.storage.Delete(r.Context(), saved.URL)
+		writeError(w, http.StatusNotFound, "taxon not found")
+		return
+	}
+	if err != nil {
+		_ = h.storage.Delete(r.Context(), saved.URL)
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"id": id, "url": saved.URL})
+}
+
+// handleDeleteSound removes a recording by id.
+func (h *AdminHandler) handleDeleteSound(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(w, r, "id")
+	if !ok {
+		return
+	}
+	url, err := h.photos.DeleteSound(r.Context(), id)
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "sound not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.storage != nil {
+		if delErr := h.storage.Delete(r.Context(), url); delErr != nil {
+			log.Printf("admin: removing stored sound %q: %v", url, delErr)
+		}
+	}
+	writeSuccess(w, map[string]string{"message": "deleted"})
 }
 
 // validPhotoDifficulty reports whether d is one of the quiz difficulty levels.

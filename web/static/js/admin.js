@@ -10,6 +10,8 @@ function adminApp() {
         search: { query: '', results: [] },
         selected: null,
         photos: [],
+        sounds: [],
+        soundForm: { mode: 'upload', url: '', file: null, attribution: '', license: '' },
         form: { mode: 'upload', url: '', file: null, preview: '', attribution: '', license: '', difficulty: '' },
         inviteLink: '',
         tab: 'dashboard',
@@ -191,6 +193,51 @@ function adminApp() {
             } catch (e) {
                 this.error = e.message;
             }
+            this.loadSounds();
+        },
+
+        async loadSounds() {
+            if (!this.selected) return;
+            try {
+                const data = await this.api('/admin/taxa/' + this.selected.cd_nom + '/sounds');
+                this.sounds = data.sounds || [];
+            } catch (e) { this.error = e.message; }
+        },
+        onSoundFile(event) { this.soundForm.file = event.target.files[0] || null; },
+        submitSound() { return this.soundForm.mode === 'upload' ? this.uploadSound() : this.addSoundByURL(); },
+        async uploadSound() {
+            if (!this.selected || !this.soundForm.file) { this.error = 'Choisissez un fichier audio'; return; }
+            this.busy = true; this.error = '';
+            try {
+                const fd = new FormData();
+                fd.append('file', this.soundForm.file);
+                fd.append('attribution', this.soundForm.attribution);
+                fd.append('license', this.soundForm.license);
+                const res = await fetch('/api/v1/admin/taxa/' + this.selected.cd_nom + '/sound-upload', {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token }, body: fd
+                });
+                if (res.status === 401 || res.status === 403) { this.logout(); throw new Error('Session expirée'); }
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Erreur');
+                this.soundForm = { mode: 'upload', url: '', file: null, attribution: '', license: '' };
+                await this.loadSounds();
+            } catch (e) { this.error = e.message; } finally { this.busy = false; }
+        },
+        async addSoundByURL() {
+            if (!this.selected || !this.soundForm.url.trim()) { this.error = 'URL requise'; return; }
+            this.busy = true; this.error = '';
+            try {
+                await this.api('/admin/taxa/' + this.selected.cd_nom + '/sounds', 'POST', {
+                    url: this.soundForm.url, attribution: this.soundForm.attribution, license: this.soundForm.license
+                });
+                this.soundForm = { mode: 'url', url: '', file: null, attribution: '', license: '' };
+                await this.loadSounds();
+            } catch (e) { this.error = e.message; } finally { this.busy = false; }
+        },
+        async removeSound(id) {
+            this.busy = true; this.error = '';
+            try { await this.api('/admin/sounds/' + id, 'DELETE'); await this.loadSounds(); }
+            catch (e) { this.error = e.message; } finally { this.busy = false; }
         },
 
         // ----- Zones d'image (zoom Détail + espèces multiples) -----

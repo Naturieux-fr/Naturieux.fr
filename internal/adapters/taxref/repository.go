@@ -353,6 +353,87 @@ type PhotoRecord struct {
 	Zones       json.RawMessage `json:"zones"`
 }
 
+// SoundRecord is an owned audio recording managed by the back-office.
+type SoundRecord struct {
+	ID          int    `json:"id"`
+	CdNom       int    `json:"cd_nom"`
+	URL         string `json:"url"`
+	Attribution string `json:"attribution"`
+	License     string `json:"license"`
+}
+
+// AddSound inserts a locally owned recording for a taxon and returns its id.
+func (r *Repository) AddSound(ctx context.Context, cdNom int, url, attribution, license string) (int, error) {
+	var exists int
+	err := r.db.QueryRowContext(ctx, `SELECT 1 FROM taxref_species WHERE cd_nom = ?`, cdNom).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ports.ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("taxref add sound: %w", err)
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO taxref_sounds (cd_nom, url, attribution, license) VALUES (?, ?, ?, ?)`,
+		cdNom, url, attribution, license)
+	if err != nil {
+		return 0, fmt.Errorf("taxref add sound: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id), nil
+}
+
+// ListSounds returns the owned recordings for a taxon.
+func (r *Repository) ListSounds(ctx context.Context, cdNom int) ([]SoundRecord, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, cd_nom, url, attribution, license FROM taxref_sounds WHERE cd_nom = ? ORDER BY id`, cdNom)
+	if err != nil {
+		return nil, fmt.Errorf("taxref list sounds: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]SoundRecord, 0)
+	for rows.Next() {
+		var s SoundRecord
+		if err := rows.Scan(&s.ID, &s.CdNom, &s.URL, &s.Attribution, &s.License); err != nil {
+			return nil, fmt.Errorf("scanning sound: %w", err)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// DeleteSound removes an owned recording by id and returns its URL.
+func (r *Repository) DeleteSound(ctx context.Context, id int) (string, error) {
+	var url string
+	err := r.db.QueryRowContext(ctx, `SELECT url FROM taxref_sounds WHERE id = ?`, id).Scan(&url)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ports.ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("taxref delete sound: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM taxref_sounds WHERE id = ?`, id); err != nil {
+		return "", fmt.Errorf("taxref delete sound: %w", err)
+	}
+	return url, nil
+}
+
+// RandomSounded returns a random species that has an owned recording, with that
+// recording's URL and credit. ok is false when no recording exists yet.
+func (r *Repository) RandomSounded(ctx context.Context) (int, string, string, string, bool, error) {
+	var cdNom int
+	var url, attribution, license string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT cd_nom, url, attribution, license FROM taxref_sounds
+		ORDER BY RANDOM() LIMIT 1`).Scan(&cdNom, &url, &attribution, &license)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", "", "", false, nil
+	}
+	if err != nil {
+		return 0, "", "", "", false, fmt.Errorf("taxref random sound: %w", err)
+	}
+	return cdNom, url, attribution, license, true, nil
+}
+
 // SpeciesZone is a species-tagged region of a photo (for the "locate" game).
 type SpeciesZone struct {
 	CdNom int     `json:"cd_nom"`

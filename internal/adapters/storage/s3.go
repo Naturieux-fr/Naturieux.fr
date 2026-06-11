@@ -76,7 +76,7 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3, error) {
 // Save streams the data to the bucket under a generated key and returns its
 // public URL.
 func (s *S3) Save(ctx context.Context, contentType string, r io.Reader) (Saved, error) {
-	ext, err := ExtensionFor(contentType)
+	ext, err := extensionForAny(contentType)
 	if err != nil {
 		return Saved{}, err
 	}

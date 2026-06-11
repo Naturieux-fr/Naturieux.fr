@@ -625,3 +625,11 @@ textarea.ink-field { resize: vertical; font-family: inherit; line-height: 1.6; }
 .legal-list { margin: 8px 0 8px 18px; line-height: 1.7; }
 .report-plate .legal-list li { margin-bottom: 6px; }
 .legal-foot { margin-top: 22px; font-size: .78rem; color: var(--ink-3); font-style: italic; }
+
+/* ============================ QUIZ SON ============================ */
+.mount-frame.mode-sound { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: linear-gradient(160deg, var(--forest-2, #2f4a36), #1c2a20); padding: 28px; }
+.sound-player { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+.sound-emblem { font-size: 3.4rem; color: var(--parch, #f3ead8); opacity: .9; animation: soundpulse 2s ease-in-out infinite; }
+.sound-hint { color: var(--parch, #f3ead8); opacity: .85; font-family: var(--serif); font-style: italic; }
+.sound-player audio { width: 90%; max-width: 420px; }
+@keyframes soundpulse { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.12); opacity: 1; } }

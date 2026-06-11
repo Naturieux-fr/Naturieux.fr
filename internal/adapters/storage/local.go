@@ -36,7 +36,7 @@ func (l *Local) Dir() string {
 // The filename is generated (uuid + extension from the content type), never
 // derived from user input, so it cannot escape the storage directory.
 func (l *Local) Save(_ context.Context, contentType string, r io.Reader) (Saved, error) {
-	ext, err := ExtensionFor(contentType)
+	ext, err := extensionForAny(contentType)
 	if err != nil {
 		return Saved{}, err
 	}

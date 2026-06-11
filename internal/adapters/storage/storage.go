@@ -40,10 +40,42 @@ var allowedExt = map[string]string{
 	"image/gif":  ".gif",
 }
 
+// allowedAudioExt maps accepted audio content types to file extensions.
+var allowedAudioExt = map[string]string{
+	"audio/mpeg":      ".mp3",
+	"audio/mp3":       ".mp3",
+	"audio/ogg":       ".ogg",
+	"application/ogg": ".ogg",
+	"audio/wav":       ".wav",
+	"audio/x-wav":     ".wav",
+	"audio/webm":      ".weba",
+}
+
 // ExtensionFor returns the file extension for an accepted image content type,
 // or ErrUnsupportedType.
 func ExtensionFor(contentType string) (string, error) {
 	if ext, ok := allowedExt[contentType]; ok {
+		return ext, nil
+	}
+	return "", ErrUnsupportedType
+}
+
+// AudioExtensionFor returns the file extension for an accepted audio content
+// type, or ErrUnsupportedType.
+func AudioExtensionFor(contentType string) (string, error) {
+	if ext, ok := allowedAudioExt[contentType]; ok {
+		return ext, nil
+	}
+	return "", ErrUnsupportedType
+}
+
+// extensionForAny returns the extension for an accepted image OR audio content
+// type. Used by the storage backends, which persist both kinds of media.
+func extensionForAny(contentType string) (string, error) {
+	if ext, ok := allowedExt[contentType]; ok {
+		return ext, nil
+	}
+	if ext, ok := allowedAudioExt[contentType]; ok {
 		return ext, nil
 	}
 	return "", ErrUnsupportedType

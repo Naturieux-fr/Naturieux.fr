@@ -24,11 +24,18 @@ type QuestionFactory interface {
 	CreateQuestionFor(ctx context.Context, quizType quiz.QuizType, difficulty quiz.Difficulty, speciesID int) (*quiz.Question, error)
 }
 
+// AudioSource provides owned recordings for the Sound quiz: it returns a random
+// species that has an owned recording, with that recording's URL and credit.
+type AudioSource interface {
+	RandomSounded(ctx context.Context) (speciesID int, url, attribution, license string, ok bool, err error)
+}
+
 // questionFactory implements QuestionFactory.
 type questionFactory struct {
 	speciesRepo ports.SpeciesRepository
 	taxonFilter string
 	placeID     int
+	audio       AudioSource
 }
 
 // QuestionFactoryOption configures the factory.
@@ -45,6 +52,13 @@ func WithTaxonFilter(taxon string) QuestionFactoryOption {
 func WithPlaceFilter(placeID int) QuestionFactoryOption {
 	return func(f *questionFactory) {
 		f.placeID = placeID
+	}
+}
+
+// WithAudioSource enables the Sound quiz by providing a recording source.
+func WithAudioSource(src AudioSource) QuestionFactoryOption {
+	return func(f *questionFactory) {
+		f.audio = src
 	}
 }
 
@@ -66,6 +80,10 @@ func (f *questionFactory) CreateQuestion(
 	difficulty quiz.Difficulty,
 	taxonFilter string,
 ) (*quiz.Question, error) {
+	if quizType == quiz.SoundQuiz {
+		return f.createSoundQuestion(ctx, difficulty)
+	}
+
 	// The per-session category takes precedence over the factory default.
 	taxon := taxonFilter
 	if taxon == "" {
@@ -114,6 +132,44 @@ func (f *questionFactory) CreateQuestionFor(
 		return nil, fmt.Errorf("species %d has no photos", speciesID)
 	}
 	return f.buildQuestion(ctx, quizType, difficulty, correct)
+}
+
+// createSoundQuestion builds a Sound quiz question from an owned recording,
+// with same-group distractors. The media is the audio URL.
+func (f *questionFactory) createSoundQuestion(ctx context.Context, difficulty quiz.Difficulty) (*quiz.Question, error) {
+	if f.audio == nil {
+		return nil, errors.New("sound quiz unavailable: no audio source")
+	}
+	cdNom, url, attribution, license, ok, err := f.audio.RandomSounded(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("picking a recording: %w", err)
+	}
+	if !ok || url == "" {
+		return nil, errors.New("aucun enregistrement disponible — ajoutez des sons depuis l'administration")
+	}
+	correct, err := f.speciesRepo.GetByID(ctx, cdNom)
+	if err != nil {
+		return nil, fmt.Errorf("loading sounded species: %w", err)
+	}
+
+	config := quiz.DefaultDifficultyConfigs()[difficulty]
+	wrong, err := f.getWrongChoices(ctx, correct, config.ChoicesCount-1)
+	if err != nil {
+		return nil, fmt.Errorf("getting wrong choices: %w", err)
+	}
+	choices := make([]quiz.Choice, 0, config.ChoicesCount)
+	choices = append(choices, quiz.Choice{Species: correct, IsCorrect: true})
+	for _, wr := range wrong {
+		choices = append(choices, quiz.Choice{Species: wr, IsCorrect: false})
+	}
+	rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
+
+	question, err := quiz.NewQuestion(uuid.New().String(), quiz.SoundQuiz, difficulty, correct, choices, url)
+	if err != nil {
+		return nil, err
+	}
+	question.SetMediaCredit(attribution, license)
+	return question, nil
 }
 
 // buildQuestion assembles a question around a chosen correct species: it draws

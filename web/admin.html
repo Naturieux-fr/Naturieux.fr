@@ -243,6 +243,36 @@
                     </select>
                     <button @click="submitPhoto()" class="btn btn-solid" :disabled="busy">Ajouter au cabinet</button>
                 </div>
+
+                <h3 class="adm-sub">Chants &amp; sons (quiz Son)</h3>
+                <div class="photo-rows" x-show="sounds.length">
+                    <template x-for="s in sounds" :key="s.id">
+                        <div class="photo-row">
+                            <audio :src="s.url" controls preload="none" style="max-width:220px"></audio>
+                            <span class="photo-link" x-text="s.attribution || s.url"></span>
+                            <button class="btn-trash" @click="removeSound(s.id)" title="Retirer">✕</button>
+                        </div>
+                    </template>
+                </div>
+                <p class="empty-note" x-show="!sounds.length">Aucun enregistrement pour cette espèce.</p>
+
+                <div class="source-toggle">
+                    <button class="toggle-btn" :class="{ active: soundForm.mode === 'upload' }" @click="soundForm.mode = 'upload'">Déposer un audio</button>
+                    <button class="toggle-btn" :class="{ active: soundForm.mode === 'url' }" @click="soundForm.mode = 'url'">Lien externe</button>
+                </div>
+                <div class="photo-form">
+                    <template x-if="soundForm.mode === 'upload'">
+                        <div class="drop-zone">
+                            <input type="file" accept="audio/*" @change="onSoundFile($event)">
+                        </div>
+                    </template>
+                    <template x-if="soundForm.mode === 'url'">
+                        <input type="url" class="ink-field block" x-model="soundForm.url" placeholder="URL du fichier audio (mp3, ogg…)">
+                    </template>
+                    <input type="text" class="ink-field block" x-model="soundForm.attribution" placeholder="Attribution (auteur)">
+                    <input type="text" class="ink-field block" x-model="soundForm.license" placeholder="Code licence (ex. cc-by)">
+                    <button @click="submitSound()" class="btn btn-solid" :disabled="busy">Ajouter le son</button>
+                </div>
             </article>
         </div>
 
@@ -302,6 +332,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.6"></script>
+    <script src="/static/js/admin.js?v=2.7"></script>
 </body>
 </html>

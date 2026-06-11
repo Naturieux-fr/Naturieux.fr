@@ -79,12 +79,16 @@ func main() {
 		log.Fatalf("Failed to create demo player: %v", err)
 	}
 
-	// Create question factory
-	questionFactory := appquiz.NewQuestionFactory(
-		speciesRepo,
+	// Create question factory. The Sound quiz uses owned recordings, which only
+	// the TAXREF source manages, so it is wired below once that source is known.
+	factoryOpts := []appquiz.QuestionFactoryOption{
 		appquiz.WithTaxonFilter(""),            // All taxa
 		appquiz.WithPlaceFilter(francePlaceID), // France
-	)
+	}
+	if soundRepo, ok := speciesRepo.(*taxref.Repository); ok {
+		factoryOpts = append(factoryOpts, appquiz.WithAudioSource(soundRepo))
+	}
+	questionFactory := appquiz.NewQuestionFactory(speciesRepo, factoryOpts...)
 
 	// Create quiz service
 	quizService := appquiz.NewService(
