@@ -60,8 +60,12 @@ l'**identité visuelle** (logo + favicon).
 ## P2 — Améliorations
 
 - [x] **Quiz Son** — mode Chant sur enregistrements possédés (upload admin). *(fait)*
-- [ ] **Mode révision** : revoir les espèces ratées (répétition espacée).
-- [ ] **PWA** : manifest + service worker pour usage mobile/terrain.
+- [x] **Formats de jeu** : **Chrono** (90 s) et **Survie** (1 erreur). *(fait)*
+- [x] **Mode révision** : revoir les espèces ratées (`player_misses`, décroissance au succès). *(fait)*
+- [x] **PWA** : manifest + service worker, appli installable + shell hors-ligne. *(fait)*
+- [ ] **Récupération de compte** : mot de passe oublié (nécessite e-mail).
+- [ ] **Mode famille/ordre** : « quelle famille ? » au lieu de l'espèce.
+- [ ] **Filtres lieu & saison** (la catégorie est faite).
 - [ ] **Récupération de compte** : mot de passe oublié (nécessite e-mail).
 - [ ] **Migration API v2 iNaturalist** (pertinent seulement si on garde iNaturalist en appoint).
 - [ ] **Tests E2E frontend** (Playwright) intégrés à la CI.
@@ -72,7 +76,7 @@ l'**identité visuelle** (logo + favicon).
 - [x] **Conteneurisation** : Dockerfile multi-stage + `docker-compose.yml` (+ profil `minio`).
 - [~] **Hébergement naturieux.fr** : outils prêts — reverse proxy **Caddy** (TLS auto), profil compose `tls`, en-têtes de sécurité, guide `05-mise-en-ligne.md`. Reste le déploiement effectif (géré par l'utilisateur sur son serveur).
 - [x] **Page mentions légales / confidentialité** : page `/legal` (RGPD, licences, crédits). *(champs `[à compléter]` à remplir avant ouverture)*
-- [ ] **Monitoring** : métriques basiques (parties/jour, taux d'erreur API).
+- [x] **Monitoring** : endpoint `/metrics` (Prometheus) — requêtes totales/erreurs/par classe. *(fait)*
 
 ## Dette technique
 
