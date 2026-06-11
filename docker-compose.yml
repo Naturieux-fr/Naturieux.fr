@@ -76,6 +76,28 @@ services:
       "
     restart: "no"
 
+  # Optional HTTPS reverse proxy (automatic Let's Encrypt certificates).
+  # Enable with:  NATURIEUX_DOMAIN=your-domain.fr docker compose --profile tls up -d
+  # The domain's DNS must point at this host and ports 80/443 be reachable.
+  caddy:
+    image: caddy:2-alpine
+    container_name: naturieux-caddy
+    profiles: ["tls"]
+    depends_on:
+      - naturieux
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      NATURIEUX_DOMAIN: "${NATURIEUX_DOMAIN:-localhost}"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
   naturieux-data:
   minio-data:
+  caddy-data:
+  caddy-config:

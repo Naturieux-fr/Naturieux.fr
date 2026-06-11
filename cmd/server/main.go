@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -161,6 +162,11 @@ func main() {
 		http.ServeFile(w, r, "web/admin.html")
 	})
 
+	// Serve the legal / privacy (RGPD) page
+	mux.HandleFunc("/legal", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/legal.html")
+	})
+
 	// Locally stored uploads are read by the quiz-image proxy (the raw /media
 	// path is not exposed to players; only the admin file server uses it).
 	if local, ok := mediaStore.(*storage.Local); ok {
@@ -181,12 +187,12 @@ func main() {
 		http.ServeFile(w, r, "web/index.html")
 	})
 
-	// Add CORS middleware for development
-	corsHandler := corsMiddleware(mux)
+	// Security headers, then CORS (for development cross-origin calls).
+	rootHandler := securityHeaders(corsMiddleware(mux))
 
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      corsHandler,
+		Handler:      rootHandler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 120 * time.Second, // Increased for iNaturalist API calls
 		IdleTimeout:  60 * time.Second,
@@ -221,6 +227,22 @@ func main() {
 	cancel()
 
 	log.Println("Server stopped")
+}
+
+// securityHeaders adds defensive response headers. HSTS is only emitted when
+// the request arrived over HTTPS (directly or via a TLS-terminating proxy that
+// sets X-Forwarded-Proto), so plain-HTTP / LAN use is unaffected.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // corsMiddleware adds CORS headers for development.

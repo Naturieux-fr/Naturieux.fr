@@ -1,0 +1,13 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt).
+#
+# Set NATURIEUX_DOMAIN to your domain (e.g. naturieux.fr). The domain's DNS
+# must point at this host, and ports 80 + 443 must be reachable from the
+# internet. Caddy then obtains and renews the TLS certificate automatically.
+#
+# For a quick local test without a real domain, set NATURIEUX_DOMAIN=localhost
+# (Caddy issues a local self-signed cert).
+
+{$NATURIEUX_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy naturieux:8080
+}
