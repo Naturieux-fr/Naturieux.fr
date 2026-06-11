@@ -23,3 +23,23 @@ type AccountStore interface {
 	// SetCredentials sets a player's password hash (used at registration).
 	SetCredentials(ctx context.Context, id, passwordHash string) error
 }
+
+// PlayerSummary is a compact view of a player for the admin back-office.
+type PlayerSummary struct {
+	ID         string  `json:"id"`
+	Username   string  `json:"username"`
+	Role       string  `json:"role"`
+	Level      int     `json:"level"`
+	TotalGames int     `json:"total_games"`
+	Accuracy   float64 `json:"accuracy"`
+	CreatedAt  string  `json:"created_at"`
+}
+
+// PlayerAdminStore exposes player administration queries.
+type PlayerAdminStore interface {
+	CountPlayers(ctx context.Context) (int, error)
+	TotalGames(ctx context.Context) (int, error)
+	ListPlayers(ctx context.Context, limit int) ([]PlayerSummary, error)
+	DeletePlayer(ctx context.Context, id string) error
+	SetRole(ctx context.Context, id, role string) error
+}

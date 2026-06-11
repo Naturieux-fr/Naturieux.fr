@@ -425,3 +425,21 @@ func (r *Repository) Version(ctx context.Context) string {
 
 // Ensure interface compliance.
 var _ ports.SpeciesRepository = (*Repository)(nil)
+
+// CountPhotos returns the total number of owned photos.
+func (r *Repository) CountPhotos(ctx context.Context) (int, error) {
+	var n int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM taxref_photos`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting photos: %w", err)
+	}
+	return n, nil
+}
+
+// CountSpeciesWithPhotos returns how many distinct species have at least one photo.
+func (r *Repository) CountSpeciesWithPhotos(ctx context.Context) (int, error) {
+	var n int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT cd_nom) FROM taxref_photos`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting species with photos: %w", err)
+	}
+	return n, nil
+}

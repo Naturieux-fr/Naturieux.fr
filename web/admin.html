@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Naturieux — Cabinet de conservation</title>
-    <link rel="icon" href="/static/img/favicon.svg?v=1" type="image/svg+xml"><path d=%22M16 28V11%22 fill=%22none%22 stroke=%22%2324402c%22 stroke-width=%222%22/><path d=%22M16 19c-5 0-8-3-8-8 5 0 8 3 8 8ZM16 16c4 0 6.5-2.6 6.5-6.5C18.5 9.5 16 12 16 16Z%22 fill=%22%2324402c%22/></svg>">
+    <link rel="icon" href="/static/img/favicon.svg?v=1" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3.0">
-    <link rel="stylesheet" href="/static/css/admin.css?v=2.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.2">
+    <link rel="stylesheet" href="/static/css/admin.css?v=2.2">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -43,8 +43,52 @@
 
             <p class="adm-error" x-show="error" x-text="error"></p>
 
+            <!-- Onglets -->
+            <nav class="adm-tabs">
+                <button :class="{ active: tab==='dashboard' }" @click="tab='dashboard'">Tableau de bord</button>
+                <button :class="{ active: tab==='players' }" @click="tab='players'; loadPlayers()">Joueurs</button>
+                <button :class="{ active: tab==='invites' }" @click="tab='invites'">Invitations</button>
+                <button :class="{ active: tab==='species' }" @click="tab='species'">Espèces &amp; photos</button>
+            </nav>
+
+            <!-- Tableau de bord -->
+            <article class="plate reveal" style="--d:1" x-show="tab==='dashboard'">
+                <span class="plate-no">◴</span>
+                <h2 class="plate-title">Tableau de bord</h2>
+                <div class="stat-grid">
+                    <div class="stat"><span class="stat-n" x-text="stats.players ?? '—'"></span><span class="stat-l">Naturalistes</span></div>
+                    <div class="stat"><span class="stat-n" x-text="stats.games ?? '—'"></span><span class="stat-l">Parties jouées</span></div>
+                    <div class="stat"><span class="stat-n" x-text="stats.rooms_active ?? 0"></span><span class="stat-l">Duels en cours</span></div>
+                    <div class="stat"><span class="stat-n" x-text="stats.photos ?? '—'"></span><span class="stat-l">Photos</span></div>
+                    <div class="stat"><span class="stat-n" x-text="stats.species_with_photos ?? '—'"></span><span class="stat-l">Espèces couvertes</span></div>
+                    <div class="stat"><span class="stat-n" x-text="(stats.species ?? 0).toLocaleString('fr')"></span><span class="stat-l">Espèces TAXREF</span></div>
+                </div>
+                <button @click="loadStats()" class="btn btn-quiet" style="margin-top:16px">Rafraîchir</button>
+            </article>
+
+            <!-- Joueurs -->
+            <article class="plate reveal" style="--d:1" x-show="tab==='players'">
+                <span class="plate-no">☺</span>
+                <h2 class="plate-title">Joueurs</h2>
+                <p class="empty-note" x-show="!players.length">Aucun joueur.</p>
+                <div class="player-rows" x-show="players.length">
+                    <template x-for="p in players" :key="p.id">
+                        <div class="player-row">
+                            <span class="pl-name" x-text="p.username"></span>
+                            <span class="pl-role" :class="{ adm: p.role==='admin' }" x-text="p.role"></span>
+                            <span class="pl-stat" x-text="`niv. ${p.level}`"></span>
+                            <span class="pl-stat" x-text="`${p.total_games} parties`"></span>
+                            <span class="pl-stat" x-text="`${Math.round(p.accuracy)}%`"></span>
+                            <button class="btn-mini" @click="setRole(p.id, p.role==='admin'?'player':'admin')"
+                                    x-text="p.role==='admin'?'Rétrograder':'Promouvoir'"></button>
+                            <button class="btn-trash" @click="deletePlayer(p.id, p.username)" title="Supprimer">✕</button>
+                        </div>
+                    </template>
+                </div>
+            </article>
+
             <!-- Invitations -->
-            <article class="plate reveal" style="--d:1">
+            <article class="plate reveal" style="--d:1" x-show="tab==='invites'">
                 <span class="plate-no">✦</span>
                 <h2 class="plate-title">Inviter un naturaliste</h2>
                 <p class="plate-lead">Générez un lien d'inscription à envoyer (valable 14 jours).</p>
@@ -56,7 +100,7 @@
             </article>
 
             <!-- Recherche -->
-            <article class="plate reveal" style="--d:2">
+            <article class="plate reveal" style="--d:2" x-show="tab==='species'">
                 <span class="plate-no">I</span>
                 <h2 class="plate-title">Trouver une espèce</h2>
                 <div class="field-row">
@@ -79,7 +123,7 @@
             </article>
 
             <!-- Planches du taxon -->
-            <article class="plate reveal" style="--d:2" x-show="selected">
+            <article class="plate reveal" style="--d:2" x-show="tab==='species' && selected">
                 <span class="plate-no">II</span>
                 <h2 class="plate-title">
                     Planches de <em x-text="selected ? selected.scientific_name : ''"></em>
@@ -130,6 +174,6 @@
         </div>
     </div>
 
-    <script src="/static/js/admin.js?v=2.1"></script>
+    <script src="/static/js/admin.js?v=2.2"></script>
 </body>
 </html>

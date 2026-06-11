@@ -87,3 +87,25 @@
     .photo-link { flex-basis: 100%; order: 3; }
     .photo-diff { min-width: 0; }
 }
+
+/* ===== Back-office : onglets, tableau de bord, joueurs ===== */
+.adm-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 18px; }
+.adm-tabs button {
+    background: none; border: 1px solid var(--hair); padding: 8px 14px;
+    font-size: .82rem; color: var(--ink-2); cursor: pointer; font-family: inherit;
+}
+.adm-tabs button.active { background: var(--forest); color: var(--paper-2); border-color: var(--forest); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 16px; }
+.stat { border: 1px solid var(--hair); background: var(--paper-3); padding: 16px; text-align: center; }
+.stat-n { display: block; font-family: var(--serif); font-weight: 700; font-size: 1.8rem; color: var(--forest-2); }
+.stat-l { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+.player-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.player-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--hair); }
+.pl-name { flex: 1; font-weight: 600; color: var(--forest-2); }
+.pl-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); border: 1px solid var(--hair); padding: 1px 6px; }
+.pl-role.adm { color: var(--rust); border-color: var(--rust); }
+.pl-stat { font-size: .8rem; color: var(--ink-3); }
+.btn-mini { background: none; border: 1px solid var(--moss); color: var(--moss); padding: 3px 9px; font-size: .72rem; cursor: pointer; }
+.btn-mini:hover { background: var(--moss); color: var(--paper-2); }

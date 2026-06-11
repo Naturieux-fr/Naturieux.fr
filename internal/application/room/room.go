@@ -658,3 +658,10 @@ func (r *Room) allDone() bool {
 	}
 	return true
 }
+
+// Count returns the number of live rooms.
+func (m *Manager) Count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.rooms)
+}

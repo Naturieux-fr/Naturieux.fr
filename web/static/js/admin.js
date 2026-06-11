@@ -12,9 +12,33 @@ function adminApp() {
         photos: [],
         form: { mode: 'upload', url: '', file: null, preview: '', attribution: '', license: '', difficulty: '' },
         inviteLink: '',
+        tab: 'dashboard',
+        stats: {},
+        players: [],
 
         init() {
             this.token = localStorage.getItem('naturieux_admin_token') || '';
+            if (this.token) this.loadStats();
+        },
+
+        // Dashboard
+        async loadStats() {
+            try { this.stats = await this.api('/admin/stats', 'GET'); } catch (e) { this.error = e.message; }
+        },
+
+        // Players
+        async loadPlayers() {
+            try { this.players = (await this.api('/admin/players', 'GET')).players || []; }
+            catch (e) { this.error = e.message; }
+        },
+        async setRole(id, role) {
+            try { await this.api(`/admin/players/${id}/role`, 'POST', { role }); await this.loadPlayers(); }
+            catch (e) { this.error = e.message; }
+        },
+        async deletePlayer(id, name) {
+            if (!confirm(`Supprimer le compte « ${name} » ?`)) return;
+            try { await this.api(`/admin/players/${id}`, 'DELETE'); await this.loadPlayers(); await this.loadStats(); }
+            catch (e) { this.error = e.message; }
         },
 
         // Generate a player invitation link to share.
@@ -62,6 +86,7 @@ function adminApp() {
                 this.token = data.token;
                 localStorage.setItem('naturieux_admin_token', this.token);
                 this.login.password = '';
+                this.loadStats();
             } catch (e) {
                 this.error = e.message;
             } finally {

@@ -120,6 +120,7 @@ func main() {
 
 	// Multiplayer rooms (in-memory, polled by clients; reclaimed when idle)
 	roomManager := room.NewManager(questionFactory)
+	adminHandler.SetAdminData(playerRepo, roomManager)
 	go reapRooms(backgroundCtx, roomManager)
 	roomHandler := httphandler.NewRoomHandler(roomManager, handler)
 

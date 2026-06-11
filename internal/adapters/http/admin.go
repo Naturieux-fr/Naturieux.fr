@@ -36,19 +36,32 @@ type Inviter interface {
 	IssueInvite() string
 }
 
+// RoomStats reports the number of live multiplayer rooms.
+type RoomStats interface {
+	Count() int
+}
+
 // AdminHandler serves the back-office API. Photo management is only available
 // when the species source is TAXREF (photos is non-nil).
 type AdminHandler struct {
 	auth    AdminAuth
-	photos  *taxref.Repository // nil when the species source has no managed photos
-	storage MediaStore         // nil when uploads are not configured
-	inviter Inviter            // nil when account invites are unavailable
+	photos  *taxref.Repository     // nil when the species source has no managed photos
+	storage MediaStore             // nil when uploads are not configured
+	inviter Inviter                // nil when account invites are unavailable
+	players ports.PlayerAdminStore // nil when player admin is unavailable
+	rooms   RoomStats              // nil when room stats are unavailable
 }
 
 // NewAdminHandler creates the admin API handler. photos, store and inviter may
 // be nil.
 func NewAdminHandler(auth AdminAuth, photos *taxref.Repository, store MediaStore, inviter Inviter) *AdminHandler {
 	return &AdminHandler{auth: auth, photos: photos, storage: store, inviter: inviter}
+}
+
+// SetAdminData wires the dashboard and player-management data sources.
+func (h *AdminHandler) SetAdminData(players ports.PlayerAdminStore, rooms RoomStats) {
+	h.players = players
+	h.rooms = rooms
 }
 
 // RegisterRoutes wires the admin endpoints onto the mux.
@@ -60,6 +73,96 @@ func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/taxa/{cd_nom}/upload", h.requireAdmin(h.handleUploadPhoto))
 	mux.HandleFunc("DELETE /api/v1/admin/photos/{id}", h.requireAdmin(h.handleDeletePhoto))
 	mux.HandleFunc("POST /api/v1/admin/invites", h.requireAuth(h.handleCreateInvite))
+	mux.HandleFunc("GET /api/v1/admin/stats", h.requireAuth(h.handleStats))
+	mux.HandleFunc("GET /api/v1/admin/players", h.requireAuth(h.handleListPlayers))
+	mux.HandleFunc("DELETE /api/v1/admin/players/{id}", h.requireAuth(h.handleDeletePlayer))
+	mux.HandleFunc("POST /api/v1/admin/players/{id}/role", h.requireAuth(h.handleSetPlayerRole))
+}
+
+// handleStats returns dashboard figures.
+func (h *AdminHandler) handleStats(w http.ResponseWriter, r *http.Request) {
+	out := map[string]interface{}{}
+	ctx := r.Context()
+	if h.players != nil {
+		if n, err := h.players.CountPlayers(ctx); err == nil {
+			out["players"] = n
+		}
+		if n, err := h.players.TotalGames(ctx); err == nil {
+			out["games"] = n
+		}
+	}
+	if h.rooms != nil {
+		out["rooms_active"] = h.rooms.Count()
+	}
+	if h.photos != nil {
+		if n, err := h.photos.CountSpecies(ctx); err == nil {
+			out["species"] = n
+		}
+		if n, err := h.photos.CountPhotos(ctx); err == nil {
+			out["photos"] = n
+		}
+		if n, err := h.photos.CountSpeciesWithPhotos(ctx); err == nil {
+			out["species_with_photos"] = n
+		}
+	}
+	writeSuccess(w, out)
+}
+
+// handleListPlayers returns the player roster.
+func (h *AdminHandler) handleListPlayers(w http.ResponseWriter, r *http.Request) {
+	if h.players == nil {
+		writeError(w, http.StatusServiceUnavailable, "player admin unavailable")
+		return
+	}
+	list, err := h.players.ListPlayers(r.Context(), 200)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]interface{}{"players": list})
+}
+
+// handleDeletePlayer removes a player account.
+func (h *AdminHandler) handleDeletePlayer(w http.ResponseWriter, r *http.Request) {
+	if h.players == nil {
+		writeError(w, http.StatusServiceUnavailable, "player admin unavailable")
+		return
+	}
+	err := h.players.DeletePlayer(r.Context(), r.PathValue("id"))
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"message": "deleted"})
+}
+
+// handleSetPlayerRole promotes or demotes a player.
+func (h *AdminHandler) handleSetPlayerRole(w http.ResponseWriter, r *http.Request) {
+	if h.players == nil {
+		writeError(w, http.StatusServiceUnavailable, "player admin unavailable")
+		return
+	}
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	err := h.players.SetRole(r.Context(), r.PathValue("id"), req.Role)
+	if errors.Is(err, ports.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeSuccess(w, map[string]string{"message": "updated"})
 }
 
 // handleCreateInvite mints a player invitation token (the front-end turns it
