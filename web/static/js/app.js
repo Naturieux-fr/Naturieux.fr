@@ -10,6 +10,14 @@ function quizApp() {
         // Leaderboard
         leaderboard: [],
 
+        // Multiplayer
+        inRoom: false,
+        roomDone: false,
+        joinCode: '',
+        room: { code: '', status: '', players: [], total: 0, hostId: '' },
+        roomPoll: null,
+        comboFlash: 0,
+
         // Dev mode
         devMode: false,
 
@@ -398,8 +406,9 @@ function quizApp() {
             }
         },
 
-        // Submit answer
+        // Submit answer (routes to the room in multiplayer)
         async submitAnswer(speciesId) {
+            if (this.inRoom) { return this.roomAnswer(speciesId); }
             if (this.showFeedback) return;
 
             this.stopTimer();
@@ -444,6 +453,18 @@ function quizApp() {
 
         // Next question or results
         nextQuestion() {
+            this.comboFlash = 0;
+            if (this.inRoom) {
+                if (this.roomDone) {
+                    this.showFeedback = false;
+                    this.screen = 'mp-podium'; // live until everyone finishes
+                } else {
+                    this.currentQuestion++;
+                    this.showFeedback = false;
+                    this.loadQuestion(this.nextQuestionData);
+                }
+                return;
+            }
             if (this.sessionComplete) {
                 this.showResults();
             } else {
@@ -492,6 +513,136 @@ function quizApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        // ---------- Multijoueur ----------
+
+        openMulti() {
+            this.error = '';
+            this.joinCode = '';
+            this.room = { code: '', status: '', players: [], total: 0, hostId: '' };
+            this.screen = 'mp-lobby';
+        },
+
+        async createRoom() {
+            this.loading = true; this.error = '';
+            try {
+                const data = await this.api('/rooms', 'POST', {
+                    host_id: this.player.id, host_name: this.player.name,
+                    difficulty: this.settings.difficulty, quiz_type: this.settings.epreuve,
+                    taxon_filter: this.settings.taxon, count: this.settings.questionCount
+                });
+                this.room.code = data.code;
+                this.startRoomPolling();
+            } catch (e) { this.error = e.message; }
+            finally { this.loading = false; }
+        },
+
+        async joinRoom() {
+            const code = this.joinCode.trim().toUpperCase();
+            if (code.length < 4) { this.error = 'Code à 4 lettres'; return; }
+            this.loading = true; this.error = '';
+            try {
+                const data = await this.api(`/rooms/${code}/join`, 'POST', {
+                    player_id: this.player.id, player_name: this.player.name
+                });
+                this.room.code = code;
+                this.applyRoom(data.room);
+                this.startRoomPolling();
+            } catch (e) {
+                this.error = e.message === 'room not found' ? 'Salon introuvable' : e.message;
+            } finally { this.loading = false; }
+        },
+
+        async startRoom() {
+            try {
+                await this.api(`/rooms/${this.room.code}/start`, 'POST', { host_id: this.player.id });
+            } catch (e) { this.error = e.message; }
+        },
+
+        startRoomPolling() {
+            this.stopRoomPolling();
+            this.roomPoll = setInterval(() => this.pollRoom(), 1500);
+            this.pollRoom();
+        },
+        stopRoomPolling() {
+            if (this.roomPoll) { clearInterval(this.roomPoll); this.roomPoll = null; }
+        },
+
+        async pollRoom() {
+            if (!this.room.code) return;
+            try {
+                const data = await this.api(`/rooms/${this.room.code}?player_id=${this.player.id}`, 'GET');
+                const wasStatus = this.room.status;
+                this.applyRoom(data.room);
+
+                // Game just started: enter the quiz with our first question.
+                if (this.room.status === 'playing' && wasStatus !== 'playing' && data.your_question) {
+                    this.beginRoomQuiz(data.your_question);
+                }
+                // Everyone finished.
+                if (this.room.status === 'finished') {
+                    this.stopRoomPolling();
+                    if (this.screen !== 'mp-podium') this.screen = 'mp-podium';
+                }
+            } catch (e) { /* keep polling; transient errors are fine */ }
+        },
+
+        applyRoom(r) {
+            if (!r) return;
+            this.room.status = r.status;
+            this.room.players = r.players || [];
+            this.room.total = r.total_questions || 0;
+            this.room.hostId = r.host_id;
+        },
+
+        get isHost() { return this.room.hostId === this.player.id; },
+        get myStanding() { return this.room.players.find(p => p.id === this.player.id) || {}; },
+
+        beginRoomQuiz(question) {
+            this.inRoom = true;
+            this.roomDone = false;
+            this.totalQuestions = this.room.total;
+            this.currentQuestion = 1;
+            this.score = 0; this.streak = 0; this.bestStreak = 0; this.correctCount = 0; this.accuracy = 0;
+            this.sessionComplete = false;
+            this.setTimeLimit();
+            this.loadQuestion(question);
+            this.screen = 'quiz';
+        },
+
+        async roomAnswer(speciesId) {
+            if (this.showFeedback) return;
+            this.stopTimer();
+            this.selectedAnswer = speciesId;
+            const timeTaken = Date.now() - this.startTime;
+            try {
+                const data = await this.api(`/rooms/${this.room.code}/answer`, 'POST', {
+                    player_id: this.player.id, species_id: speciesId || 0, time_taken_ms: timeTaken
+                });
+                this.isCorrect = data.is_correct;
+                this.correctAnswer = data.correct_species_id;
+                this.feedbackText = `C'etait: ${data.correct_name}`;
+                this.lastScore = data.score;
+                this.score = data.total_score;
+                this.streak = data.streak;
+                if (this.isCorrect) {
+                    this.correctCount++;
+                    if (this.streak > this.bestStreak) this.bestStreak = this.streak;
+                    if (this.streak >= 3) this.comboFlash = this.streak;
+                }
+                this.roomDone = data.done;
+                this.sessionComplete = data.done;
+                if (data.next_question) this.nextQuestionData = data.next_question;
+                this.showFeedback = true;
+            } catch (e) { this.error = e.message; }
+        },
+
+        leaveRoom() {
+            this.stopRoomPolling();
+            this.inRoom = false;
+            this.room = { code: '', status: '', players: [], total: 0, hostId: '' };
+            this.goHome();
         },
 
         // Quit current game

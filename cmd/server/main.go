@@ -22,6 +22,7 @@ import (
 	"github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref"
 	adminapp "github.com/Naturieux-fr/Naturieux.fr/internal/application/admin"
 	appquiz "github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz"
+	"github.com/Naturieux-fr/Naturieux.fr/internal/application/room"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification"
 	"github.com/Naturieux-fr/Naturieux.fr/internal/ports"
 )
@@ -104,10 +105,16 @@ func main() {
 	log.Printf("🗄️  Media storage ready")
 	adminHandler := httphandler.NewAdminHandler(authService, taxrefRepo, mediaStore)
 
+	// Multiplayer rooms (in-memory, polled by clients; reclaimed when idle)
+	roomManager := room.NewManager(questionFactory)
+	go reapRooms(backgroundCtx, roomManager)
+	roomHandler := httphandler.NewRoomHandler(roomManager, handler)
+
 	// Create HTTP server
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	adminHandler.RegisterRoutes(mux)
+	roomHandler.RegisterRoutes(mux)
 
 	// Serve the admin page
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
@@ -240,6 +247,20 @@ func buildSpeciesRepo(ctx context.Context, db *sql.DB, devMode bool) (ports.Spec
 		}
 		go speciesCache.StartAutoWarm(ctx, cache.DefaultWarmInterval, cache.WarmTaxa, cache.DefaultWarmTarget)
 		return speciesCache, nil
+	}
+}
+
+// reapRooms periodically discards multiplayer rooms idle for over an hour.
+func reapRooms(ctx context.Context, mgr *room.Manager) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			mgr.Cleanup(time.Hour)
+		}
 	}
 }
 
