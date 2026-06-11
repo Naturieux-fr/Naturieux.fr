@@ -6,10 +6,10 @@
 
 | Category | Issues | Status |
 |----------|--------|--------|
-| SAST (gosec) | 0 | ✅ |
-| High Severity | 0 | ✅ |
-| Medium Severity | 0 | ✅ |
-| Vulnerabilities | 12 | ❌ |
+| SAST (gosec) | 15 | ❌ |
+| High Severity | 4 | ❌ |
+| Medium Severity | 4 | ✅ |
+| Vulnerabilities | 0 | ✅ |
 | Secrets Detected | 0 | ✅ |
 
 ## SAST Results (gosec)
@@ -18,138 +18,164 @@
 Results:
 
 
-Summary:
-  Gosec  : dev
-  Files  : 14
-  Lines  : 2488
-  Nosec  : 0
-  Issues : 0
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/http/locate.go:30] - G404 (CWE-338): Use of weak random number generator (math/rand or math/rand/v2 instead of crypto/rand) (Confidence: MEDIUM, Severity: HIGH)
+    29: 		}
+  > 30: 		return rand.Intn(n)
+    31: 	}}
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/http/handlers.go:717] - G704 (CWE-918): SSRF via taint analysis (Confidence: HIGH, Severity: HIGH)
+    716: 	req.Header.Set("User-Agent", "Naturieux/1.0 (https://naturieux.fr)")
+  > 717: 	resp, err := http.DefaultClient.Do(req)
+    718: 	if err != nil {
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/http/handlers.go:711] - G704 (CWE-918): SSRF via taint analysis (Confidence: HIGH, Severity: HIGH)
+    710: 	// Remote (e.g. iNaturalist / S3): proxy the bytes server-side.
+  > 711: 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, mediaURL, nil)
+    712: 	if err != nil {
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/storage/local.go:24] - G703 (CWE-22): Path traversal via taint analysis (Confidence: HIGH, Severity: HIGH)
+    23: func NewLocal(dir string) (*Local, error) {
+  > 24: 	if err := os.MkdirAll(dir, 0o755); err != nil {
+    25: 		return nil, fmt.Errorf("creating media dir: %w", err)
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/taxref/photocsv.go:21] - G304 (CWE-22): Potential file inclusion via variable (Confidence: HIGH, Severity: MEDIUM)
+    20: func ParsePhotoCSV(path string) ([]PhotoCSVRow, error) {
+  > 21: 	f, err := os.Open(path)
+    22: 	if err != nil {
+
+Autofix: Consider using os.Root to scope file access under a fixed root (Go >=1.24). Prefer root.Open/root.Stat over os.Open/os.Stat to prevent directory traversal.
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/storage/local.go:47] - G304 (CWE-22): Potential file inclusion via variable (Confidence: HIGH, Severity: MEDIUM)
+    46: 
+  > 47: 	f, err := os.Create(path)
+    48: 	if err != nil {
+
+Autofix: Consider using os.Root to scope file access under a fixed root (Go >=1.24). Prefer root.Open/root.Stat over os.Open/os.Stat to prevent directory traversal.
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/importphotos/main.go:90] - G304 (CWE-22): Potential file inclusion via variable (Confidence: HIGH, Severity: MEDIUM)
+    89: 		path := filepath.Join(*dir, row.Photo)
+  > 90: 		raw, err := os.ReadFile(path)
+    91: 		if err != nil {
+
+Autofix: Consider using os.Root to scope file access under a fixed root (Go >=1.24). Prefer root.Open/root.Stat over os.Open/os.Stat to prevent directory traversal.
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/storage/local.go:24] - G301 (CWE-276): Expect directory permissions to be 0750 or less (Confidence: HIGH, Severity: MEDIUM)
+    23: func NewLocal(dir string) (*Local, error) {
+  > 24: 	if err := os.MkdirAll(dir, 0o755); err != nil {
+    25: 		return nil, fmt.Errorf("creating media dir: %w", err)
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server/main.go:404] - G706 (CWE-117): Log injection via taint analysis (Confidence: HIGH, Severity: LOW)
+    403: 	}
+  > 404: 	log.Printf("Admin account ready: %s", user)
+    405: }
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server/main.go:341] - G706 (CWE-117): Log injection via taint analysis (Confidence: HIGH, Severity: LOW)
+    340: 		} else {
+  > 341: 			log.Printf("TAXREF loaded: %d species (version %q)", count, repo.Version(ctx))
+    342: 		}
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server/main.go:247] - G706 (CWE-117): Log injection via taint analysis (Confidence: HIGH, Severity: LOW)
+    246: 		log.Printf("Health check: http://localhost:%s/health", port)
+  > 247: 		log.Printf("API: http://localhost:%s/api/v1/", port)
+    248: 		if err := server.ListenAndServe(); err != nil GOSEC_REPORT_PLACEHOLDERGOSEC_REPORT_PLACEHOLDER err != http.ErrServerClosed {
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server/main.go:246] - G706 (CWE-117): Log injection via taint analysis (Confidence: HIGH, Severity: LOW)
+    245: 		log.Printf("Frontend: http://localhost:%s/", port)
+  > 246: 		log.Printf("Health check: http://localhost:%s/health", port)
+    247: 		log.Printf("API: http://localhost:%s/api/v1/", port)
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server/main.go:245] - G706 (CWE-117): Log injection via taint analysis (Confidence: HIGH, Severity: LOW)
+    244: 		log.Printf("Starting Naturieux server on port %s", port)
+  > 245: 		log.Printf("Frontend: http://localhost:%s/", port)
+    246: 		log.Printf("Health check: http://localhost:%s/health", port)
+
+Autofix: 
+
+[/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server/main.go:244] - G706 (CWE-117): Log injection via taint analysis (Confidence: HIGH, Severity: LOW)
+    243: 	go func() {
+  > 244: 		log.Printf("Starting Naturieux server on port %s", port)
+    245: 		log.Printf("Frontend: http://localhost:%s/", port)
+
+Autofix: 
 ```
 
 ## Dependency Vulnerabilities
 
 ```
-=== Symbol Results ===
-
-Vulnerability #1: GO-2025-4175
-    Improper application of excluded DNS name constraints when verifying
-    wildcard names in crypto/x509
-  More info: https://pkg.go.dev/vuln/GO-2025-4175
-  Standard library
-    Found in: crypto/x509@go1.22.12
-    Fixed in: crypto/x509@go1.24.11
-    Example traces found:
-      #1: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
-
-Vulnerability #2: GO-2025-4155
-    Excessive resource consumption when printing error string for host
-    certificate validation in crypto/x509
-  More info: https://pkg.go.dev/vuln/GO-2025-4155
-  Standard library
-    Found in: crypto/x509@go1.22.12
-    Fixed in: crypto/x509@go1.24.11
-    Example traces found:
-      #1: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
-      #2: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.VerifyHostname
-
-Vulnerability #3: GO-2025-4013
-    Panic when validating certificates with DSA public keys in crypto/x509
-  More info: https://pkg.go.dev/vuln/GO-2025-4013
-  Standard library
-    Found in: crypto/x509@go1.22.12
-    Fixed in: crypto/x509@go1.24.8
-    Example traces found:
-      #1: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
-
-Vulnerability #4: GO-2025-4012
-    Lack of limit when parsing cookies can cause memory exhaustion in net/http
-  More info: https://pkg.go.dev/vuln/GO-2025-4012
-  Standard library
-    Found in: net/http@go1.22.12
-    Fixed in: net/http@go1.24.8
-    Example traces found:
-      #1: internal/adapters/inaturalist/client.go:150:30: inaturalist.Client.doRequest calls http.Client.Do
-
-Vulnerability #5: GO-2025-4011
-    Parsing DER payload can cause memory exhaustion in encoding/asn1
-  More info: https://pkg.go.dev/vuln/GO-2025-4011
-  Standard library
-    Found in: encoding/asn1@go1.22.12
-    Fixed in: encoding/asn1@go1.24.8
-    Example traces found:
-      #1: cmd/server/main.go:91:15: server.main calls signal.Notify, which eventually calls asn1.Unmarshal
-
-Vulnerability #6: GO-2025-4010
-    Insufficient validation of bracketed IPv6 hostnames in net/url
-  More info: https://pkg.go.dev/vuln/GO-2025-4010
-  Standard library
-    Found in: net/url@go1.22.12
-    Fixed in: net/url@go1.24.8
-    Example traces found:
-      #1: internal/adapters/inaturalist/client.go:142:40: inaturalist.Client.doRequest calls http.NewRequestWithContext, which calls url.Parse
-      #2: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls url.ParseRequestURI
-      #3: internal/adapters/inaturalist/client.go:150:30: inaturalist.Client.doRequest calls http.Client.Do, which eventually calls url.URL.Parse
-
-Vulnerability #7: GO-2025-4009
-    Quadratic complexity when parsing some invalid inputs in encoding/pem
-  More info: https://pkg.go.dev/vuln/GO-2025-4009
-  Standard library
-    Found in: encoding/pem@go1.22.12
-    Fixed in: encoding/pem@go1.24.8
-    Example traces found:
-      #1: cmd/server/main.go:91:15: server.main calls signal.Notify, which eventually calls pem.Decode
-
-Vulnerability #8: GO-2025-4008
-    ALPN negotiation error contains attacker controlled information in
-    crypto/tls
-  More info: https://pkg.go.dev/vuln/GO-2025-4008
-  Standard library
-    Found in: crypto/tls@go1.22.12
-    Fixed in: crypto/tls@go1.24.8
-    Example traces found:
-      #1: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
-      #2: internal/adapters/inaturalist/client.go:338:45: inaturalist.Client.Search calls json.Decoder.Decode, which eventually calls tls.Conn.Read
-      #3: internal/application/quiz/service.go:212:14: quiz.Service.SubmitAnswer calls fmt.Printf, which eventually calls tls.Conn.Write
-      #4: internal/adapters/inaturalist/client.go:150:30: inaturalist.Client.doRequest calls http.Client.Do, which eventually calls tls.Dialer.DialContext
-
-Vulnerability #9: GO-2025-4007
-    Quadratic complexity when checking name constraints in crypto/x509
-  More info: https://pkg.go.dev/vuln/GO-2025-4007
-  Standard library
-    Found in: crypto/x509@go1.22.12
-    Fixed in: crypto/x509@go1.24.9
-    Example traces found:
-      #1: cmd/server/main.go:91:15: server.main calls signal.Notify, which eventually calls x509.CertPool.AppendCertsFromPEM
-      #2: cmd/server/main.go:84:34: server.main calls http.Server.ListenAndServe, which eventually calls x509.Certificate.Verify
-      #3: cmd/server/main.go:91:15: server.main calls signal.Notify, which eventually calls x509.ParseCertificate
-
-Vulnerability #10: GO-2025-3751
-    Sensitive headers not cleared on cross-origin redirect in net/http
-  More info: https://pkg.go.dev/vuln/GO-2025-3751
-  Standard library
-    Found in: net/http@go1.22.12
-    Fixed in: net/http@go1.23.10
+No vulnerabilities found.
 ```
 
 ## License Compliance
 
 ```
-E0119 21:31:50.922628    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/domain/gamification" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:50.932344    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/domain/species: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/domain/species" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:50.942486    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/domain/quiz" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:50.958409    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/ports: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/ports" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:50.969758    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/application/quiz" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:50.982092    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/http" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:50.995277    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/inaturalist" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-E0119 21:31:51.009782    4567 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/cmd/server: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/server" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/cmd/server
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/adapters/inaturalist
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/domain/species
-Unknown license type  found for library github.com/Naturieux-fr/Naturieux.fr/internal/ports
+E0611 19:49:25.273864    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/domain/gamification: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/domain/gamification" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:25.283707    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/domain/species: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/domain/species" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:25.307795    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/domain/quiz: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/domain/quiz" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:25.324378    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/ports: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/ports" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:25.336639    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/sqlite: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/sqlite" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+W0611 19:49:25.341619    5018 library.go:101] "golang.org/x/sys/unix" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/golang.org/x/sys@v0.46.0/unix/asm_linux_amd64.s
+W0611 19:49:25.365352    5018 library.go:101] "modernc.org/libc" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/modernc.org/libc@v1.72.3/abi0_linux_amd64.s
+/home/runner/go/pkg/mod/modernc.org/libc@v1.72.3/tls_linux_amd64.s
+E0611 19:49:25.444325    5018 library.go:122] Failed to find license for modernc.org/mathutil: cannot find a known open source license for "/home/runner/go/pkg/mod/modernc.org/mathutil@v1.7.1" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/go/pkg/mod/modernc.org/mathutil@v1.7.1"
+E0611 19:49:25.536953    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/taxref: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/taxref" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:25.553051    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/cmd/importoccurrences: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/importoccurrences" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:25.570346    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/storage: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/storage" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+W0611 19:49:25.597555    5018 library.go:101] "github.com/cespare/xxhash/v2" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/cespare/xxhash/v2@v2.3.0/xxhash_amd64.s
+W0611 19:49:25.600844    5018 library.go:101] "github.com/klauspost/compress/s2" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/klauspost/compress@v1.18.6/s2/decode_amd64.s
+/home/runner/go/pkg/mod/github.com/klauspost/compress@v1.18.6/s2/encodeblock_amd64.s
+W0611 19:49:25.688642    5018 library.go:101] "github.com/klauspost/crc32" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/klauspost/crc32@v1.3.0/crc32_amd64.s
+W0611 19:49:25.693468    5018 library.go:101] "golang.org/x/sys/cpu" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/golang.org/x/sys@v0.46.0/cpu/cpu_gc_x86.s
+W0611 19:49:25.697929    5018 library.go:101] "github.com/minio/crc64nvme" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/minio/crc64nvme@v1.1.1/crc64_amd64.s
+W0611 19:49:25.725487    5018 library.go:101] "github.com/klauspost/cpuid/v2" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/klauspost/cpuid/v2@v2.2.11/cpuid_amd64.s
+W0611 19:49:25.728866    5018 library.go:101] "github.com/minio/md5-simd" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/minio/md5-simd@v1.1.2/block16_amd64.s
+/home/runner/go/pkg/mod/github.com/minio/md5-simd@v1.1.2/block8_amd64.s
+/home/runner/go/pkg/mod/github.com/minio/md5-simd@v1.1.2/md5block_amd64.s
+W0611 19:49:25.940610    5018 library.go:101] "golang.org/x/crypto/argon2" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/golang.org/x/crypto@v0.53.0/argon2/blamka_amd64.s
+W0611 19:49:25.945232    5018 library.go:101] "golang.org/x/crypto/blake2b" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/golang.org/x/crypto@v0.53.0/blake2b/blake2bAVX2_amd64.s
+/home/runner/go/pkg/mod/golang.org/x/crypto@v0.53.0/blake2b/blake2b_amd64.s
+W0611 19:49:26.199055    5018 library.go:101] "github.com/zeebo/xxh3" contains non-Go code that can't be inspected for further dependencies:
+/home/runner/go/pkg/mod/github.com/zeebo/xxh3@v1.1.0/accum_vector_avx512_amd64.s
+/home/runner/go/pkg/mod/github.com/zeebo/xxh3@v1.1.0/accum_vector_avx_amd64.s
+/home/runner/go/pkg/mod/github.com/zeebo/xxh3@v1.1.0/accum_vector_sse_amd64.s
+E0611 19:49:26.266504    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/media: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/media" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.291077    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/cmd/importphotos: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/importphotos" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.316223    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/cmd/importtaxref: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/cmd/importtaxref" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.342609    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/cache: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/cache" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.369914    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/auth: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/auth" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.406985    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/application/account: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/application/account" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.434690    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/application/challenge: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/application/challenge" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.464550    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/application/quiz: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/application/quiz" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.494069    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/application/room: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/application/room" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
+E0611 19:49:26.525319    5018 library.go:122] Failed to find license for github.com/Naturieux-fr/Naturieux.fr/internal/adapters/http: cannot find a known open source license for "/home/runner/work/Naturieux.fr/Naturieux.fr/internal/adapters/http" whose name matches regexp ^(?i)((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$ and locates up until "/home/runner/work/Naturieux.fr/Naturieux.fr"
 ```
 
 ---
