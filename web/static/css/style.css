@@ -393,6 +393,20 @@ body {
 .ledger-meta small { color: var(--ink-3); font-size: .72rem; }
 .empty-note { text-align: center; color: var(--ink-3); font-style: italic; font-family: var(--serif); padding: 30px 0; }
 
+/* ============================ HAUTS FAITS ============================ */
+.ach-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px; margin: 22px 0;
+}
+.ach-card {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    gap: 6px; padding: 18px 12px; border: 1px solid var(--hair); background: var(--paper-3);
+}
+.ach-card.locked { opacity: .5; filter: grayscale(.7); }
+.ach-icon { font-size: 2rem; line-height: 1; }
+.ach-name { font-family: var(--serif); font-weight: 600; color: var(--forest-2); }
+.ach-desc { font-size: .74rem; color: var(--ink-3); }
+
 /* ============================ TOASTS & SÉRIE ============================ */
 .toast-stack {
     position: fixed; top: 18px; right: 18px; z-index: 7000;

@@ -48,21 +48,21 @@ function quizApp() {
         toasts: [],
         _toastSeq: 0,
         _preGame: null,
-        achLabels: {
-            first_game: ['🌱', 'Première sortie'],
-            veteran: ['🎖️', 'Vétéran — 100 parties'],
-            dedicated: ['🔥', 'Assidu — 7 jours d\'affilée'],
-            perfect_score: ['💯', 'Sans-faute'],
-            streak_master: ['⚡', 'Série de 10'],
-            level_ten: ['🌿', 'Niveau 10'],
-            level_fifty: ['🌳', 'Niveau 50'],
-            mammal_expert: ['🦊', 'Expert des mammifères'],
-            bird_watcher: ['🦉', 'Ornithologue'],
-            bug_hunter: ['🐝', 'Entomologiste'],
-            botanist: ['🌸', 'Botaniste'],
-            expert_mode: ['🧭', 'Épreuve experte'],
-            master_natural: ['👑', 'Maître naturaliste']
-        },
+        achievementsCatalogue: [
+            { id: 'first_game', icon: '🌱', name: 'Première sortie', desc: 'Terminer une première partie' },
+            { id: 'perfect_score', icon: '💯', name: 'Sans-faute', desc: '100 % sur au moins 10 planches' },
+            { id: 'streak_master', icon: '⚡', name: 'Série de dix', desc: '10 bonnes réponses d\'affilée' },
+            { id: 'expert_mode', icon: '🧭', name: 'Épreuve experte', desc: 'Terminer un quiz en mode Expert' },
+            { id: 'master_natural', icon: '👑', name: 'Maître naturaliste', desc: 'Mode Maître réussi à 80 %+' },
+            { id: 'level_ten', icon: '🌿', name: 'Naturaliste confirmé', desc: 'Atteindre le niveau 10' },
+            { id: 'level_fifty', icon: '🌳', name: 'Sommité du vivant', desc: 'Atteindre le niveau 50' },
+            { id: 'dedicated', icon: '🔥', name: 'Assidu', desc: 'Jouer 7 jours d\'affilée' },
+            { id: 'veteran', icon: '🎖️', name: 'Vétéran', desc: 'Terminer 100 parties' },
+            { id: 'mammal_expert', icon: '🦊', name: 'Mammalogiste', desc: '100 mammifères identifiés' },
+            { id: 'bird_watcher', icon: '🦉', name: 'Ornithologue', desc: '100 oiseaux identifiés' },
+            { id: 'bug_hunter', icon: '🐝', name: 'Entomologiste', desc: '100 insectes identifiés' },
+            { id: 'botanist', icon: '🌸', name: 'Botaniste', desc: '100 plantes identifiées' }
+        ],
 
         // Settings
         settings: {
@@ -306,6 +306,21 @@ function quizApp() {
             return data.data;
         },
 
+        // Achievement metadata by id (falls back to a generic badge).
+        achInfo(id) {
+            return this.achievementsCatalogue.find(a => a.id === id) || { id, icon: '🏅', name: id, desc: '' };
+        },
+        achUnlocked(id) {
+            return (this.player.achievements || []).includes(id);
+        },
+        get achievementsUnlockedCount() {
+            return (this.player.achievements || []).length;
+        },
+        openAchievements() {
+            this.error = '';
+            this.screen = 'achievements';
+        },
+
         // Show a transient toast (auto-dismissed).
         pushToast(icon, title, text) {
             const id = ++this._toastSeq;
@@ -321,8 +336,8 @@ function quizApp() {
             }
             const fresh = (this.player.achievements || []).filter(a => !before.achievements.includes(a));
             for (const a of fresh) {
-                const [icon, label] = this.achLabels[a] || ['🏅', a];
-                this.pushToast(icon, 'Haut fait débloqué', label);
+                const info = this.achInfo(a);
+                this.pushToast(info.icon, 'Haut fait débloqué', info.name);
             }
             if (this.player.dailyStreak > before.dailyStreak && this.player.dailyStreak >= 2) {
                 this.pushToast('🔥', 'Série quotidienne', `${this.player.dailyStreak} jours d'affilée !`);

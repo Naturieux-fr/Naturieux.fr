@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.6">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.7">
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-Rpe/8orFUm5Q1GplYBHxbuA8Az8O8C5sAoOsdbRWkqPjKFaxPgGZipj4zeHL7lxX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -160,10 +160,34 @@
                             <span x-show="loading" class="spinner"></span>
                         </button>
                         <button @click="openMulti()" class="btn btn-quiet">⚔ Duel entre naturalistes</button>
+                        <button @click="openAchievements()" class="btn btn-quiet">Cabinet des hauts faits</button>
                         <button @click="showLeaderboard()" class="btn btn-quiet">Consulter le registre</button>
                     </div>
                 </article>
             </div>
+        </section>
+
+        <!-- ============ HAUTS FAITS ============ -->
+        <section x-show="screen === 'achievements'" x-transition.opacity class="screen report">
+            <article class="plate report-plate reveal" style="--d:0">
+                <span class="plate-no">Cabinet</span>
+                <h2 class="report-title">Cabinet des hauts faits</h2>
+                <p class="plate-lead" x-text="`${achievementsUnlockedCount} / ${achievementsCatalogue.length} obtenus`"></p>
+
+                <div class="ach-grid">
+                    <template x-for="a in achievementsCatalogue" :key="a.id">
+                        <div class="ach-card" :class="{ locked: !achUnlocked(a.id) }">
+                            <span class="ach-icon" x-text="achUnlocked(a.id) ? a.icon : '🔒'"></span>
+                            <span class="ach-name" x-text="a.name"></span>
+                            <span class="ach-desc" x-text="a.desc"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="plate-actions">
+                    <button @click="goHome()" class="btn btn-solid btn-lg">Retour au carnet</button>
+                </div>
+            </article>
         </section>
 
         <!-- ============ MULTIJOUEUR — SALON ============ -->
@@ -448,6 +472,6 @@
         <div class="notice" x-show="error" x-transition @click="error = ''" x-text="error"></div>
     </div>
 
-    <script src="/static/js/app.js?v=2.6"></script>
+    <script src="/static/js/app.js?v=2.7"></script>
 </body>
 </html>
