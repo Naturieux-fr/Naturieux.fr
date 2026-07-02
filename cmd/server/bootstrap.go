@@ -86,11 +86,11 @@ func occurrenceEmpty(db *sql.DB) bool {
 // failing that, the largest .txt/.csv) is used.
 func importFromURL(url, prefer string, importer func(io.Reader) error) error {
 	client := &http.Client{Timeout: 30 * time.Minute}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil) // #nosec G704 -- operator-provided bootstrap URL (open data)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil) // #nosec G704 -- one-time bootstrap download from an operator-provided open-data URL
 	if err != nil {
 		return fmt.Errorf("request: %w", err)
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704 -- one-time bootstrap download from an operator-provided open-data URL
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
